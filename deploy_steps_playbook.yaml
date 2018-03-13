@@ -1,0 +1,297 @@
+- hosts: undercloud
+  name: Gather facts undercloud
+  gather_facts: yes
+  become: false
+  tags:
+    - facts
+- hosts: overcloud
+  name: Gather facts overcloud
+  gather_facts: yes
+  tags:
+    - facts
+- hosts: all
+  name: Load global variables
+  gather_facts: no
+  tasks:
+    - include_vars: global_vars.yaml
+  tags:
+    - always
+- hosts: overcloud
+  name: Bootstrap TripleO servers
+  gather_facts: no
+  any_errors_fatal: yes
+  roles:
+    - tripleo-bootstrap
+  tags:
+    - bootstrap
+- hosts: overcloud
+  name: Server deployments
+  gather_facts: no
+  any_errors_fatal: yes
+  tasks:
+    - include: Controller/deployments.yaml
+      vars:
+        force: false
+      when: role_name == 'Controller'
+      with_items: "{{ Controller_pre_deployments|default([]) }}"
+    - include: Compute/deployments.yaml
+      vars:
+        force: false
+      when: role_name == 'Compute'
+      with_items: "{{ Compute_pre_deployments|default([]) }}"
+  tags:
+    - overcloud
+    - pre_deploy_steps
+- hosts: overcloud
+  name: Host prep steps
+  gather_facts: no
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+  become: true
+  tasks:
+    - include: Controller/host_prep_tasks.yaml
+      when: role_name == 'Controller'
+    - include: Compute/host_prep_tasks.yaml
+      when: role_name == 'Compute'
+  tags:
+    - overcloud
+    - host_prep_steps
+- hosts: undercloud
+  name: External deployment step 1
+  gather_facts: no
+  any_errors_fatal: yes
+  become: false
+  vars:
+    step: '1'
+  tasks:
+    - include: external_deploy_steps_tasks.yaml
+  tags:
+    - external
+    - external_deploy_steps
+- hosts: overcloud
+  name: Overcloud deploy step tasks for 1
+  gather_facts: no
+  any_errors_fatal: yes
+  # FIXME(shardy) - it would be nice to use strategy: free to
+  # allow the tasks per-step to run in parallel on each role,
+  # but that doesn't work with any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '1'
+  tasks:
+    - include: Controller/deploy_steps_tasks.yaml
+      when: role_name == 'Controller'
+    - include: Compute/deploy_steps_tasks.yaml
+      when: role_name == 'Compute'
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: overcloud
+  name: Overcloud common deploy step tasks 1
+  gather_facts: no
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '1'
+  tasks:
+    - include: common_deploy_steps_tasks.yaml
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: undercloud
+  name: External deployment step 2
+  gather_facts: no
+  any_errors_fatal: yes
+  become: false
+  vars:
+    step: '2'
+  tasks:
+    - include: external_deploy_steps_tasks.yaml
+  tags:
+    - external
+    - external_deploy_steps
+- hosts: overcloud
+  name: Overcloud deploy step tasks for 2
+  gather_facts: no
+  any_errors_fatal: yes
+  # FIXME(shardy) - it would be nice to use strategy: free to
+  # allow the tasks per-step to run in parallel on each role,
+  # but that doesn't work with any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '2'
+  tasks:
+    - include: Controller/deploy_steps_tasks.yaml
+      when: role_name == 'Controller'
+    - include: Compute/deploy_steps_tasks.yaml
+      when: role_name == 'Compute'
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: overcloud
+  name: Overcloud common deploy step tasks 2
+  gather_facts: no
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '2'
+  tasks:
+    - include: common_deploy_steps_tasks.yaml
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: undercloud
+  name: External deployment step 3
+  gather_facts: no
+  any_errors_fatal: yes
+  become: false
+  vars:
+    step: '3'
+  tasks:
+    - include: external_deploy_steps_tasks.yaml
+  tags:
+    - external
+    - external_deploy_steps
+- hosts: overcloud
+  name: Overcloud deploy step tasks for 3
+  gather_facts: no
+  any_errors_fatal: yes
+  # FIXME(shardy) - it would be nice to use strategy: free to
+  # allow the tasks per-step to run in parallel on each role,
+  # but that doesn't work with any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '3'
+  tasks:
+    - include: Controller/deploy_steps_tasks.yaml
+      when: role_name == 'Controller'
+    - include: Compute/deploy_steps_tasks.yaml
+      when: role_name == 'Compute'
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: overcloud
+  name: Overcloud common deploy step tasks 3
+  gather_facts: no
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '3'
+  tasks:
+    - include: common_deploy_steps_tasks.yaml
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: undercloud
+  name: External deployment step 4
+  gather_facts: no
+  any_errors_fatal: yes
+  become: false
+  vars:
+    step: '4'
+  tasks:
+    - include: external_deploy_steps_tasks.yaml
+  tags:
+    - external
+    - external_deploy_steps
+- hosts: overcloud
+  name: Overcloud deploy step tasks for 4
+  gather_facts: no
+  any_errors_fatal: yes
+  # FIXME(shardy) - it would be nice to use strategy: free to
+  # allow the tasks per-step to run in parallel on each role,
+  # but that doesn't work with any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '4'
+  tasks:
+    - include: Controller/deploy_steps_tasks.yaml
+      when: role_name == 'Controller'
+    - include: Compute/deploy_steps_tasks.yaml
+      when: role_name == 'Compute'
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: overcloud
+  name: Overcloud common deploy step tasks 4
+  gather_facts: no
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '4'
+  tasks:
+    - include: common_deploy_steps_tasks.yaml
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: undercloud
+  name: External deployment step 5
+  gather_facts: no
+  any_errors_fatal: yes
+  become: false
+  vars:
+    step: '5'
+  tasks:
+    - include: external_deploy_steps_tasks.yaml
+  tags:
+    - external
+    - external_deploy_steps
+- hosts: overcloud
+  name: Overcloud deploy step tasks for 5
+  gather_facts: no
+  any_errors_fatal: yes
+  # FIXME(shardy) - it would be nice to use strategy: free to
+  # allow the tasks per-step to run in parallel on each role,
+  # but that doesn't work with any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '5'
+  tasks:
+    - include: Controller/deploy_steps_tasks.yaml
+      when: role_name == 'Controller'
+    - include: Compute/deploy_steps_tasks.yaml
+      when: role_name == 'Compute'
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: overcloud
+  name: Overcloud common deploy step tasks 5
+  gather_facts: no
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 6d15bb07-dd91-460e-ac11-e1b0a9a8abc6
+    step: '5'
+  tasks:
+    - include: common_deploy_steps_tasks.yaml
+  tags:
+    - overcloud
+    - deploy_steps
+- hosts: overcloud
+  name: Server Post Deployments
+  gather_facts: no
+  any_errors_fatal: yes
+  tasks:
+    - include: Controller/deployments.yaml
+      vars:
+        force: false
+      when: role_name == 'Controller'
+      with_items: "{{ Controller_post_deployments|default([]) }}"
+    - include: Compute/deployments.yaml
+      vars:
+        force: false
+      when: role_name == 'Compute'
+      with_items: "{{ Compute_post_deployments|default([]) }}"
+  tags:
+    - overcloud
+    - post_deploy_steps
+- hosts: undercloud
+  name: External deployment Post Deploy tasks
+  gather_facts: no
+  any_errors_fatal: yes
+  become: false
+  tasks:
+    - include: external_post_deploy_steps_tasks.yaml
+  tags:
+    - external
+    - external_deploy_steps

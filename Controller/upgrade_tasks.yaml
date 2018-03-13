@@ -1,0 +1,1362 @@
+- ignore_errors: true
+  name: Check for aodh api service running under apache
+  register: httpd_enabled
+  shell: httpd -t -D DUMP_VHOSTS | grep -q aodh
+  tags: common
+- command: systemctl is-active --quiet httpd
+  ignore_errors: true
+  name: Check if httpd is running
+  register: httpd_running
+  tags: common
+- command: systemctl is-enabled --quiet openstack-aodh-evaluator
+  ignore_errors: true
+  name: Check if aodh_evaluator is deployed
+  register: aodh_evaluator_enabled
+  tags: common
+- command: systemctl is-enabled --quiet openstack-aodh-listener
+  ignore_errors: true
+  name: Check if aodh_listener is deployed
+  register: aodh_listener_enabled
+  tags: common
+- command: systemctl is-enabled --quiet openstack-aodh-notifier
+  ignore_errors: true
+  name: Check if aodh_notifier is deployed
+  register: aodh_notifier_enabled
+  tags: common
+- command: systemctl is-enabled --quiet openstack-ceilometer-central
+  ignore_errors: true
+  name: Check if ceilometer_agent_central is deployed
+  register: ceilometer_agent_central_enabled
+  tags: common
+- command: systemctl is-enabled --quiet openstack-ceilometer-notification
+  ignore_errors: true
+  name: Check if ceilometer_agent_notification is deployed
+  register: ceilometer_agent_notification_enabled
+  tags: common
+- command: systemctl is-enabled openstack-cinder-api
+  ignore_errors: true
+  name: Check is cinder_api is deployed
+  register: cinder_api_enabled
+  tags: common
+- command: systemctl is-enabled openstack-cinder-scheduler
+  ignore_errors: true
+  name: Check if cinder_scheduler is deployed
+  register: cinder_scheduler_enabled
+  tags: common
+- name: Get docker Cinder-Volume image
+  set_fact:
+    docker_image_latest: docker.io/tripleomaster/centos-binary-cinder-volume:pcmklatest
+- ignore_errors: true
+  name: Check if Cinder-Volume is already containerized
+  register: cinder_volume_containerized
+  shell: docker ps -a | grep {{docker_image_latest}}
+- command: systemctl is-enabled --quiet openstack-glance-api
+  ignore_errors: true
+  name: Check if glance_api is deployed
+  register: glance_api_enabled
+  tags: common
+- command: systemctl is-enabled --quiet openstack-gnocchi-api
+  ignore_errors: true
+  name: Check if gnocchi_api is deployed
+  register: gnocchi_api_enabled
+  tags: common
+- ignore_errors: true
+  name: Check for gnocchi_api running under apache
+  register: httpd_enabled
+  shell: httpd -t -D DUMP_VHOSTS | grep -q gnocchi
+  tags: common
+- command: systemctl is-active --quiet httpd
+  ignore_errors: true
+  name: Check if httpd service is running
+  register: httpd_running
+  tags: common
+- command: systemctl is-enabled --quiet openstack-gnocchi-metricd
+  ignore_errors: true
+  name: Check if gnocchi_metricd is deployed
+  register: gnocchi_metricd_enabled
+  tags: common
+- command: systemctl is-enabled --quiet openstack-gnocchi-statsd
+  ignore_errors: true
+  name: Check if gnocchi_statsd is deployed
+  register: gnocchi_statsd_enabled
+  tags: common
+- name: Get docker haproxy image
+  set_fact:
+    docker_image_latest: docker.io/tripleomaster/centos-binary-haproxy:pcmklatest
+- ignore_errors: true
+  name: Check if haproxy is already containerized
+  register: haproxy_containerized
+  shell: docker ps -a | grep {{docker_image_latest}}
+- command: systemctl is-enabled --quiet openstack-heat-api
+  ignore_errors: true
+  name: Check if heat_api is deployed
+  register: heat_api_enabled
+  tags: common
+- ignore_errors: true
+  name: Check for heat_api running under apache
+  register: httpd_enabled
+  shell: httpd -t -D DUMP_VHOSTS | grep -q heat_api_wsgi
+  tags: common
+- command: systemctl is-enabled --quiet openstack-heat-api-cfn
+  ignore_errors: true
+  name: Check if heat_api_cfn is deployed
+  register: heat_api_cfn_enabled
+  tags: common
+- ignore_errors: true
+  name: Check for heat_api_cfn running under apache
+  register: httpd_enabled
+  shell: httpd -t -D DUMP_VHOSTS | grep -q heat_api_cfn_wsgi
+  tags: common
+- command: systemctl is-enabled --quiet openstack-heat-engine
+  ignore_errors: true
+  name: Check if heat_engine is deployed
+  register: heat_engine_enabled
+  tags: common
+- ignore_errors: true
+  name: Check for horizon running under apache
+  register: httpd_enabled
+  shell: httpd -t -D DUMP_VHOSTS | grep -q horizon_vhost
+  tags: common
+- command: systemctl is-enabled --quiet iscsid
+  ignore_errors: true
+  name: Check if iscsid service is deployed
+  register: iscsid_enabled
+  tags: common
+- command: systemctl is-enabled --quiet iscsid.socket
+  ignore_errors: true
+  name: Check if iscsid.socket service is deployed
+  register: iscsid_socket_enabled
+  tags: common
+- ignore_errors: true
+  name: Check for keystone running under apache
+  register: httpd_enabled
+  shell: httpd -t -D DUMP_VHOSTS | grep -q keystone_wsgi
+  tags: common
+- command: systemctl is-enabled --quiet memcached
+  ignore_errors: true
+  name: Check if memcached is deployed
+  register: memcached_enabled
+  tags: common
+- name: Check for mongodb service
+  register: mongod_service
+  stat: path=/usr/lib/systemd/system/mongod.service
+  tags: common
+- name: Get docker Mysql image
+  set_fact:
+    docker_image_latest: docker.io/tripleomaster/centos-binary-mariadb:pcmklatest
+- ignore_errors: true
+  name: Check if Mysql is already containerized
+  register: mysql_containerized
+  shell: docker ps -a | grep {{docker_image_latest}}
+- command: systemctl is-enabled --quiet neutron-server
+  ignore_errors: true
+  name: Check if neutron_server is deployed
+  register: neutron_server_enabled
+  tags: common
+- command: systemctl is-enabled --quiet neutron-dhcp-agent
+  ignore_errors: true
+  name: Check if neutron_dhcp_agent is deployed
+  register: neutron_dhcp_agent_enabled
+  tags: common
+- command: systemctl is-enabled --quiet neutron-l3-agent
+  ignore_errors: true
+  name: Check if neutron_l3_agent is deployed
+  register: neutron_l3_agent_enabled
+  tags: common
+- command: systemctl is-enabled --quiet neutron-metadata-agent
+  ignore_errors: true
+  name: Check if neutron_metadata_agent is deployed
+  register: neutron_metadata_agent_enabled
+  tags: common
+- command: systemctl is-enabled --quiet neutron-openvswitch-agent
+  ignore_errors: true
+  name: Check if neutron_ovs_agent is deployed
+  register: neutron_ovs_agent_enabled
+  tags: common
+- command: systemctl is-enabled --quiet openstack-nova-api
+  ignore_errors: true
+  name: Check if nova_api is deployed
+  register: nova_api_enabled
+  tags: common
+- ignore_errors: true
+  name: Check for nova-api running under apache
+  register: httpd_enabled
+  shell: httpd -t -D DUMP_VHOSTS | grep -q 'nova'
+  tags: common
+- command: systemctl is-enabled --quiet openstack-nova-conductor
+  ignore_errors: true
+  name: Check if nova_conductor is deployed
+  register: nova_conductor_enabled
+  tags: common
+- command: systemctl is-active --quiet openstack-nova-consoleauth
+  ignore_errors: true
+  name: Check if nova_consoleauth is deployed
+  register: nova_consoleauth_enabled
+  tags: common
+- command: systemctl is-enabled --quiet openstack-nova-api
+  ignore_errors: true
+  name: Check if nova_api_metadata is deployed
+  register: nova_metadata_enabled
+  tags: common
+- ignore_errors: true
+  name: Check for nova placement running under apache
+  register: httpd_enabled
+  shell: httpd -t -D DUMP_VHOSTS | grep -q placement_wsgi
+  tags: common
+- command: systemctl is-enabled --quiet openstack-nova-scheduler
+  ignore_errors: true
+  name: Check if nova_scheduler is deployed
+  register: nova_scheduler_enabled
+  tags: common
+- command: systemctl is-enabled --quiet openstack-nova-novncproxy
+  ignore_errors: true
+  name: Check if nova vncproxy is deployed
+  register: nova_vncproxy_enabled
+  tags: common
+- name: Get docker Rabbitmq image
+  set_fact:
+    docker_image_latest: docker.io/tripleomaster/centos-binary-rabbitmq:pcmklatest
+- ignore_errors: true
+  name: Check if Rabbitmq is already containerized
+  register: rabbit_containerized
+  shell: docker ps -a | grep {{docker_image_latest}}
+- name: Get docker redis image
+  set_fact:
+    docker_image_latest: docker.io/tripleomaster/centos-binary-redis:pcmklatest
+- ignore_errors: true
+  name: Check if redis is already containerized
+  register: redis_containerized
+  shell: docker ps -a | grep {{docker_image_latest}}
+- command: systemctl is-enabled --quiet "{{ item }}"
+  ignore_errors: true
+  name: Check if swift-proxy or swift-object-expirer are deployed
+  register: swift_proxy_services_enabled
+  tags: common
+  with_items:
+  - openstack-swift-proxy
+  - openstack-swift-object-expirer
+- command: systemctl is-enabled --quiet "{{ item }}"
+  ignore_errors: true
+  name: Check if swift storage services are deployed
+  register: swift_services_enabled
+  tags: common
+  with_items:
+  - openstack-swift-account-auditor
+  - openstack-swift-account-reaper
+  - openstack-swift-account-replicator
+  - openstack-swift-account
+  - openstack-swift-container-auditor
+  - openstack-swift-container-replicator
+  - openstack-swift-container-updater
+  - openstack-swift-container
+  - openstack-swift-object-auditor
+  - openstack-swift-object-replicator
+  - openstack-swift-object-updater
+  - openstack-swift-object
+- name: 'PreUpgrade step0,validation: Check if aodh api is running'
+  shell: systemctl status 'httpd' | grep -q aodh
+  tags: validation
+  when:
+  - step|int == 0
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- command: systemctl is-active --quiet openstack-aodh-evaluator
+  name: 'PreUpgrade step0,validation: Check service openstack-aodh-evaluator is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - aodh_evaluator_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-aodh-listener
+  name: 'PreUpgrade step0,validation: Check service openstack-aodh-listener is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - aodh_listener_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-aodh-notifier
+  name: 'PreUpgrade step0,validation: Check service openstack-aodh-notifier is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - aodh_notifier_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-ceilometer-central
+  name: 'PreUpgrade step0,validation: Check service openstack-ceilometer-central is
+    running'
+  tags: validation
+  when:
+  - step|int == 0
+  - ceilometer_agent_central_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-ceilometer-notification
+  name: 'PreUpgrade step0,validation: Check service openstack-ceilometer-notification
+    is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - ceilometer_agent_notification_enabled.rc == 0
+- name: 'PreUpgrade step0,validation: Check service openstack-cinder-api is running'
+  shell: systemctl is-active --quiet openstack-cinder-api
+  tags: validation
+  when:
+  - step|int == 0
+  - cinder_api_enabled.rc == 0
+- name: 'PreUpgrade step0,validation: Check service openstack-cinder-scheduler is
+    running'
+  shell: systemctl is-active --quiet openstack-cinder-scheduler
+  tags: validation
+  when:
+  - step|int == 0
+  - cinder_scheduler_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-glance-api
+  name: 'PreUpgrade step0,validation: Check service openstack-glance-api is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - glance_api_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-gnocchi-api
+  name: 'PreUpgrade step0,validation: Check service openstack-gnocchi-api is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - gnocchi_api_enabled.rc == 0
+  - httpd_enabled.rc != 0
+- name: 'PreUpgrade step0,validation: Check if gnocchi_api_wsgi is running'
+  shell: systemctl status 'httpd' | grep -q gnocchi
+  tags: validation
+  when:
+  - step|int == 0
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- command: systemctl is-active --quiet openstack-gnocchi-metricd
+  name: 'PreUpgrade step0,validation: Check service openstack-gnocchi-metricd is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - gnocchi_metricd_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-gnocchi-statsd
+  name: 'PreUpgrade step0,validation: Check service openstack-gnocchi-statsd is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - gnocchi_statsd_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-heat-api
+  name: 'PreUpgrade step0,validation: Check service openstack-heat-api is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - heat_api_enabled.rc == 0
+  - httpd_enabled.rc != 0
+- name: 'PreUpgrade step0,validation: Check if heat_api_wsgi is running'
+  shell: systemctl status 'httpd' | grep -q heat_api_wsgi
+  tags: validation
+  when:
+  - step|int == 0
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- command: systemctl is-active --quiet openstack-heat-api-cfn
+  name: 'PreUpgrade step0,validation: Check service openstack-heat-api-cfn is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - heat_api_cfn_enabled.rc == 0
+  - httpd_enabled.rc != 0
+- name: 'PreUpgrade step0,validation: Check if heat_api_cfn_wsgi is running'
+  shell: systemctl status 'httpd' | grep -q heat_api_cfn_wsgi
+  tags: validation
+  when:
+  - step|int == 0
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- command: systemctl is-active --quiet openstack-heat-engine
+  name: 'PreUpgrade step0,validation: Check service openstack-heat-engine is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - heat_engine_enabled.rc == 0
+- name: 'PreUpgrade step0,validation: Check if horizon is running'
+  shell: systemctl is-active --quiet httpd
+  tags: validation
+  when:
+  - step|int == 0
+  - httpd_enabled.rc == 0
+- command: systemctl is-active --quiet iscsid
+  name: 'PreUpgrade step0,validation: Check if iscsid is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - iscsid_enabled.rc == 0
+- command: systemctl is-active --quiet iscsid.socket
+  name: 'PreUpgrade step0,validation: Check if iscsid.socket is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - iscsid_socket_enabled.rc == 0
+- name: 'PreUpgrade step0,validation: Check if keystone_wsgi is running under httpd'
+  shell: systemctl status 'httpd' | grep -q keystone
+  tags: validation
+  when:
+  - step|int == 0
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- command: systemctl is-active --quiet memcached
+  name: 'PreUpgrade step0,validation: Check service memcached is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - memcached_enabled.rc == 0
+- command: systemctl is-active --quiet neutron-server
+  name: 'PreUpgrade step0,validation: Check service neutron-server is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - neutron_server_enabled.rc == 0
+- command: systemctl is-active --quiet neutron-dhcp-agent
+  name: 'PreUpgrade step0,validation: Check service neutron-dhcp-agent is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - neutron_dhcp_agent_enabled.rc == 0
+- command: systemctl is-active --quiet neutron-l3-agent
+  name: 'PreUpgrade step0,validation: Check service neutron-l3-agent is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - neutron_l3_agent_enabled.rc == 0
+- command: systemctl is-active --quiet neutron-metadata-agent
+  name: 'PreUpgrade step0,validation: Check service neutron-metadata-agent is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - neutron_metadata_agent_enabled.rc == 0
+- command: systemctl is-active --quiet neutron-openvswitch-agent
+  name: 'PreUpgrade step0,validation: Check service neutron-openvswitch-agent is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - neutron_ovs_agent_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-nova-api
+  name: 'PreUpgrade step0,validation: Check service openstack-nova-api is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - nova_api_enabled.rc == 0
+  - httpd_enabled.rc != 0
+- name: 'PreUpgrade step0,validation: Check if nova_wsgi is running'
+  shell: systemctl status 'httpd' | grep -q 'nova'
+  tags: validation
+  when:
+  - step|int == 0
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- command: systemctl is-active --quiet openstack-nova-conductor
+  name: 'PreUpgrade step0,validation: Check service openstack-nova-conductor is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - nova_conductor_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-nova-consoleauth
+  name: 'PreUpgrade step0,validation: Check service openstack-nova-consoleauth is
+    running'
+  tags: validation
+  when:
+  - step|int == 0
+  - nova_consoleauth_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-nova-api
+  name: 'PreUpgrade step0,validation: Check service openstack-nova-api is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - nova_metadata_enabled.rc == 0
+- name: 'PreUpgrade step0,validation: Check if placement_wsgi is running'
+  shell: systemctl status 'httpd' | grep -q placement_wsgi
+  tags: validation
+  when:
+  - step|int == 0
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- command: systemctl is-active --quiet openstack-nova-scheduler
+  name: 'PreUpgrade step0,validation: Check service openstack-nova-scheduler is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - nova_scheduler_enabled.rc == 0
+- command: systemctl is-active --quiet openstack-nova-novncproxy
+  name: 'PreUpgrade step0,validation: Check service openstack-nova-novncproxy is running'
+  tags: validation
+  when:
+  - step|int == 0
+  - nova_vncproxy_enabled.rc == 0
+- async: 30
+  name: Check pacemaker cluster running before upgrade
+  pacemaker_cluster: state=online check_and_fail=true
+  poll: 4
+  tags: validation
+  when: step|int == 0
+- command: systemctl is-active --quiet "{{ item.item }}"
+  name: 'PreUpgrade step0,validation: Check service openstack-swift-proxy and openstack-swift-object-expirer
+    are running'
+  tags: validation
+  when:
+  - step|int == 0
+  - item.rc == 0
+  with_items: '{{ swift_proxy_services_enabled.results }}'
+- command: systemctl is-active --quiet "{{ item.item }}"
+  name: 'PreUpgrade step0,validation: Check swift storage services are running'
+  tags: validation
+  when:
+  - step|int == 0
+  - item.rc == 0
+  with_items: '{{ swift_services_enabled.results }}'
+- name: Check yum for rpm-python present
+  register: rpm_python_check
+  when: step|int == 0
+  yum: name=rpm-python state=present
+- fail: msg="rpm-python package was not present before this run! Check environment
+    before re-running"
+  name: Fail when rpm-python wasn't present
+  when:
+  - step|int == 0
+  - rpm_python_check.changed != false
+- name: Stop and disable mongodb service on upgrade
+  service: name=mongod state=stopped enabled=no
+  when:
+  - step|int == 1
+  - mongod_service.stat.exists
+- ini_file: dest=/etc/nova/nova.conf section=upgrade_levels option=compute value=
+  name: Set compute upgrade level to auto
+  when: step|int == 1
+- name: Stop snmp service
+  service: name=snmpd state=stopped
+  when: step|int == 1
+- name: Stop and disable aodh service (running under httpd)
+  service: name=httpd state=stopped enabled=no
+  when:
+  - step|int == 2
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- name: Set fact for removal of openstack-aodh-api package
+  set_fact:
+    remove_aodh_api_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-aodh-api package if operator requests it
+  when:
+  - step|int == 2
+  - remove_aodh_api_package|bool
+  yum: name=openstack-aodh-api state=removed
+- name: Stop and disable openstack-aodh-evaluator service
+  service: name=openstack-aodh-evaluator.service state=stopped enabled=no
+  when:
+  - step|int == 2
+  - aodh_evaluator_enabled.rc == 0
+- name: Set fact for removal of openstack-aodh-evaluator package
+  set_fact:
+    remove_aodh_evaluator_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-aodh-evaluator package if operator requests it
+  when:
+  - step|int == 2
+  - remove_aodh_evaluator_package|bool
+  yum: name=openstack-aodh-evaluator state=removed
+- name: Stop and disable openstack-aodh-listener service
+  service: name=openstack-aodh-listener.service state=stopped enabled=no
+  when:
+  - step|int == 2
+  - aodh_listener_enabled.rc == 0
+- name: Set fact for removal of openstack-aodh-listener package
+  set_fact:
+    remove_aodh_listener_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-aodh-listener package if operator requests it
+  when:
+  - step|int == 2
+  - remove_aodh_listener_package|bool
+  yum: name=openstack-aodh-listener state=removed
+- name: Stop and disable openstack-aodh-notifier service
+  service: name=openstack-aodh-notifier.service state=stopped enabled=no
+  when:
+  - step|int == 2
+  - aodh_notifier_enabled.rc == 0
+- name: Set fact for removal of openstack-aodh-notifier package
+  set_fact:
+    remove_aodh_notifier_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-aodh-notifier package if operator requests it
+  when:
+  - step|int == 2
+  - remove_aodh_notifier_package|bool
+  yum: name=openstack-aodh-notifier state=removed
+- name: Stop and disable ceilometer agent central service
+  service: name=openstack-ceilometer-central state=stopped enabled=no
+  when:
+  - step|int == 2
+  - ceilometer_agent_central_enabled.rc == 0
+- name: Set fact for removal of openstack-ceilometer-central package
+  set_fact:
+    remove_ceilometer_central_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-ceilometer-central package if operator requests it
+  when:
+  - step|int == 2
+  - remove_ceilometer_central_package|bool
+  yum: name=openstack-ceilometer-central state=removed
+- name: Stop and disable ceilometer agent notification service
+  service: name=openstack-ceilometer-notification state=stopped enabled=no
+  when:
+  - step|int == 2
+  - ceilometer_agent_notification_enabled.rc == 0
+- name: Set fact for removal of openstack-ceilometer-notification package
+  set_fact:
+    remove_ceilometer_notification_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-ceilometer-notification package if operator requests it
+  when:
+  - step|int == 2
+  - remove_ceilometer_notification_package|bool
+  yum: name=openstack-ceilometer-notification state=removed
+- name: Stop and disable cinder_api service (pre-upgrade not under httpd)
+  service: name=openstack-cinder-api state=stopped enabled=no
+  when:
+  - step|int == 2
+  - cinder_api_enabled.rc == 0
+- ignore_errors: true
+  name: check for cinder_api running under apache (post upgrade)
+  register: cinder_api_apache
+  shell: httpd -t -D DUMP_VHOSTS | grep -q cinder
+  when: step|int == 2
+- name: Stop and disable cinder_api service
+  service: name=httpd state=stopped enabled=no
+  when:
+  - step|int == 2
+  - cinder_api_apache.rc == 0
+- file:
+    path: /var/spool/cron/cinder
+    state: absent
+  name: remove old cinder cron jobs
+  when: step|int == 2
+- name: Set fact for removal of httpd package
+  set_fact:
+    remove_httpd_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove httpd package if operator requests it
+  when:
+  - step|int == 2
+  - remove_httpd_package|bool
+  yum: name=httpd state=removed
+- name: Stop and disable cinder_scheduler service
+  service: name=openstack-cinder-scheduler state=stopped enabled=no
+  when:
+  - step|int == 2
+  - cinder_scheduler_enabled.rc == 0
+- name: Set fact for removal of openstack-cinder package
+  set_fact:
+    remove_cinder_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-cinder package if operator requests it
+  when:
+  - step|int == 2
+  - remove_cinder_package|bool
+  yum: name=openstack-cinder state=removed
+- block:
+  - name: Get docker Cinder-Volume image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-cinder-volume:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-cinder-volume:pcmklatest
+  - name: Get previous Cinder-Volume image id
+    register: cinder_volume_image_id
+    shell: docker images | awk '/cinder-volume.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Cinder-Volume image
+      register: cinder_volume_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{cinder_volume_image_id.stdout}}'
+    - name: Remove any container using the same Cinder-Volume image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ cinder_volume_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Cinder-Volume images
+      shell: docker rmi -f {{cinder_volume_image_id.stdout}}
+    when:
+    - cinder_volume_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Cinder-Volume images
+  - name: Retag pcmklatest to latest Cinder-Volume image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Retag the pacemaker image if containerized
+  when:
+  - step|int == 2
+  - cinder_volume_containerized|succeeded
+- block:
+  - command: hiera -c /etc/puppet/hiera.yaml bootstrap_nodeid
+    name: get bootstrap nodeid
+    register: bootstrap_node
+    tags: common
+  - name: set is_bootstrap_node fact
+    set_fact: is_bootstrap_node={{bootstrap_node.stdout|lower == ansible_hostname|lower}}
+    tags: common
+  - check_mode: true
+    ignore_errors: true
+    name: Check cluster resource status
+    pacemaker_resource: null
+    register: cinder_volume_res
+    resource: cinder_volume
+    state: started
+  - block:
+    - name: Disable the openstack-cinder-volume cluster resource
+      pacemaker_resource:
+        resource: openstack-cinder-volume
+        state: disable
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    - name: Delete the stopped openstack-cinder-volume cluster resource.
+      pacemaker_resource:
+        resource: openstack-cinder-volume
+        state: delete
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    when: (is_bootstrap_node) and (cinder_volume_res|succeeded)
+  - name: Disable cinder_volume service from boot
+    service: name=openstack-cinder-volume enabled=no
+  name: Cinder-Volume baremetal to container upgrade tasks
+  when:
+  - step|int == 2
+  - cinder_volume_containerized|failed
+- name: Stop and disable glance_api service
+  service: name=openstack-glance-api state=stopped enabled=no
+  when:
+  - step|int == 2
+  - glance_api_enabled.rc == 0
+- name: Set fact for removal of openstack-glance package
+  set_fact:
+    remove_glance_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-glance package if operator requests it
+  when:
+  - step|int == 2
+  - remove_glance_package|bool
+  yum: name=openstack-glance state=removed
+- name: Stop and disable gnocchi_api service
+  service: name=openstack-gnocchi-api state=stopped enabled=no
+  when:
+  - step|int == 2
+  - gnocchi_api_enabled.rc == 0
+  - httpd_enabled.rc != 0
+- name: Stop and disable httpd service
+  service: name=httpd state=stopped enabled=no
+  when:
+  - step|int == 2
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- name: Stop and disable openstack-gnocchi-metricd service
+  service: name=openstack-gnocchi-metricd.service state=stopped enabled=no
+  when:
+  - step|int == 2
+  - gnocchi_metricd_enabled.rc == 0
+- name: Stop and disable openstack-gnocchi-statsd service
+  service: name=openstack-gnocchi-statsd.service state=stopped enabled=no
+  when:
+  - step|int == 2
+  - gnocchi_statsd_enabled.rc == 0
+- block:
+  - name: Get docker Haproxy image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-haproxy:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-haproxy:pcmklatest
+  - name: Get previous Haproxy image id
+    register: haproxy_image_id
+    shell: docker images | awk '/haproxy.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Haproxy image
+      register: haproxy_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{haproxy_image_id.stdout}}'
+    - name: Remove any container using the same Haproxy image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ haproxy_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Haproxy images
+      shell: docker rmi -f {{haproxy_image_id.stdout}}
+    when:
+    - haproxy_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Haproxy images
+  - name: Retag pcmklatest to latest Haproxy image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Retag the pacemaker image if containerized
+  when:
+  - step|int == 2
+  - haproxy_containerized|succeeded
+- block:
+  - command: hiera -c /etc/puppet/hiera.yaml bootstrap_nodeid
+    name: get bootstrap nodeid
+    register: bootstrap_node
+    tags: common
+  - name: set is_bootstrap_node fact
+    set_fact: is_bootstrap_node={{bootstrap_node.stdout|lower == ansible_hostname|lower}}
+    tags: common
+  - ignore_errors: true
+    name: Check cluster resource status
+    pacemaker_resource:
+      check_mode: true
+      resource: haproxy
+      state: started
+    register: haproxy_res
+  - block:
+    - name: Disable the haproxy cluster resource.
+      pacemaker_resource:
+        resource: haproxy
+        state: disable
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    - name: Delete the stopped haproxy cluster resource.
+      pacemaker_resource:
+        resource: haproxy
+        state: delete
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    when: (is_bootstrap_node) and (haproxy_res|succeeded)
+  name: haproxy baremetal to container upgrade tasks
+  when:
+  - step|int == 2
+  - haproxy_containerized|failed
+- name: Stop and disable heat_api service (pre-upgrade not under httpd)
+  service: name=openstack-heat-api state=stopped enabled=no
+  when:
+  - step|int == 2
+  - heat_api_enabled.rc == 0
+  - httpd_enabled.rc != 0
+- name: Stop heat_api service (running under httpd)
+  service: name=httpd state=stopped
+  when:
+  - step|int == 2
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- file:
+    path: /var/spool/cron/heat
+    state: absent
+  name: remove old heat cron jobs
+  when: step|int == 2
+- name: Stop and disable heat_api_cfn service (pre-upgrade not under httpd)
+  service: name=openstack-heat-api-cfn state=stopped enabled=no
+  when:
+  - step|int == 2
+  - heat_api_cfn_enabled.rc == 0
+  - httpd_enabled.rc != 0
+- name: Stop heat_api_cfn service (running under httpd)
+  service: name=httpd state=stopped
+  when:
+  - step|int == 2
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- name: Stop and disable heat_engine service
+  service: name=openstack-heat-engine state=stopped enabled=no
+  when:
+  - step|int == 2
+  - heat_engine_enabled.rc == 0
+- name: Stop and disable horizon service (running under httpd)
+  service: name=httpd state=stopped enabled=no
+  when:
+  - step|int == 2
+  - httpd_enabled.rc == 0
+- name: Stop and disable iscsid service
+  service: name=iscsid state=stopped enabled=no
+  when:
+  - step|int == 2
+  - iscsid_enabled.rc == 0
+- name: Stop and disable iscsid.socket service
+  service: name=iscsid.socket state=stopped enabled=no
+  when:
+  - step|int == 2
+  - iscsid_socket_enabled.rc == 0
+- name: Stop and disable keystone service (running under httpd)
+  service: name=httpd state=stopped enabled=no
+  when:
+  - step|int == 2
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- file:
+    path: /var/spool/cron/keystone
+    state: absent
+  name: remove old keystone cron jobs
+  when: step|int == 2
+- name: Stop and disable memcached service
+  service: name=memcached state=stopped enabled=no
+  when:
+  - step|int == 2
+  - memcached_enabled.rc == 0
+- block:
+  - name: Get docker Mariadb image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-mariadb:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-mariadb:pcmklatest
+  - name: Get previous Mariadb image id
+    register: mariadb_image_id
+    shell: docker images | awk '/mariadb.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Mariadb image
+      register: mariadb_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{mariadb_image_id.stdout}}'
+    - name: Remove any container using the same Mariadb image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ mariadb_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Mariadb images
+      shell: docker rmi -f {{mariadb_image_id.stdout}}
+    when:
+    - mariadb_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Mariadb images
+  - name: Retag pcmklatest to latest Mariadb image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Retag the pacemaker image if containerized
+  when:
+  - step|int == 2
+  - mysql_containerized|succeeded
+- block:
+  - command: hiera -c /etc/puppet/hiera.yaml bootstrap_nodeid
+    name: get bootstrap nodeid
+    register: bootstrap_node
+    tags: common
+  - name: set is_bootstrap_node fact
+    set_fact: is_bootstrap_node={{bootstrap_node.stdout|lower == ansible_hostname|lower}}
+    tags: common
+  - ignore_errors: true
+    name: Check cluster resource status
+    pacemaker_resource:
+      check_mode: true
+      resource: galera
+      state: master
+    register: galera_res
+  - block:
+    - name: Disable the galera cluster resource
+      pacemaker_resource:
+        resource: galera
+        state: disable
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    - name: Delete the stopped galera cluster resource.
+      pacemaker_resource:
+        resource: galera
+        state: delete
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    when: (is_bootstrap_node) and (galera_res|succeeded)
+  - name: Disable mysql service
+    service: name=mariadb enabled=no
+  - file: state=absent path=/etc/xinetd.d/galera-monitor
+    name: Remove clustercheck service from xinetd
+  - name: Restart xinetd service after clustercheck removal
+    service: name=xinetd state=restarted
+  name: Mysql baremetal to container upgrade tasks
+  when:
+  - step|int == 2
+  - mysql_containerized|failed
+- name: Stop and disable neutron_api service
+  service: name=neutron-server state=stopped enabled=no
+  when:
+  - step|int == 2
+  - neutron_server_enabled.rc == 0
+- name: Set fact for removal of openstack-neutron package
+  set_fact:
+    remove_neutron_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-neutron package if operator requests it
+  when:
+  - step|int == 2
+  - remove_neutron_package|bool
+  yum: name=openstack-neutron state=removed
+- name: Stop and disable neutron_dhcp service
+  service: name=neutron-dhcp-agent state=stopped enabled=no
+  when:
+  - step|int == 2
+  - neutron_dhcp_agent_enabled.rc == 0
+- name: Stop and disable neutron_l3 service
+  service: name=neutron-l3-agent state=stopped enabled=no
+  when:
+  - step|int == 2
+  - neutron_l3_agent_enabled.rc == 0
+- name: Stop and disable neutron_metadata service
+  service: name=neutron-metadata-agent state=stopped enabled=no
+  when:
+  - step|int == 2
+  - neutron_metadata_agent_enabled.rc == 0
+- ignore_errors: true
+  name: Check openvswitch version.
+  register: ovs_version
+  shell: rpm -qa | awk -F- '/^openvswitch-2/{print $2 "-" $3}'
+  when: step|int == 2
+- ignore_errors: true
+  name: Check openvswitch packaging.
+  register: ovs_packaging_issue
+  shell: rpm -q --scripts openvswitch | awk '/postuninstall/,/*/' | grep -q "systemctl.*try-restart"
+  when: step|int == 2
+- block:
+  - file:
+      path: /root/OVS_UPGRADE
+      state: absent
+    name: 'Ensure empty directory: emptying.'
+  - file:
+      group: root
+      mode: 488
+      owner: root
+      path: /root/OVS_UPGRADE
+      state: directory
+    name: 'Ensure empty directory: creating.'
+  - command: yum makecache
+    name: Make yum cache.
+  - command: yumdownloader --destdir /root/OVS_UPGRADE --resolve openvswitch
+    name: Download OVS packages.
+  - name: Get rpm list for manual upgrade of OVS.
+    register: ovs_list_of_rpms
+    shell: ls -1 /root/OVS_UPGRADE/*.rpm
+  - args:
+      chdir: /root/OVS_UPGRADE
+    name: Manual upgrade of OVS
+    shell: 'rpm -U --test {{item}} 2>&1 | grep "already installed" || \
+
+      rpm -U --replacepkgs --notriggerun --nopostun {{item}};
+
+      '
+    with_items:
+    - '{{ovs_list_of_rpms.stdout_lines}}'
+  when:
+  - step|int == 2
+  - '''2.5.0-14'' in ovs_version.stdout|default('''') or ovs_packaging_issue|default(false)|succeeded'
+- name: Stop and disable neutron_ovs_agent service
+  service: name=neutron-openvswitch-agent state=stopped enabled=no
+  when:
+  - step|int == 2
+  - neutron_ovs_agent_enabled.rc == 0
+- name: Set fact for removal of openstack-neutron-openvswitch package
+  set_fact:
+    remove_neutron_openvswitch_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-neutron-openvswitch package if operator requests it
+  when:
+  - step|int == 2
+  - remove_neutron_openvswitch_package|bool
+  yum: name=openstack-neutron-openvswitch state=removed
+- name: Stop and disable nova_api service
+  service: name=openstack-nova-api state=stopped enabled=no
+  when:
+  - step|int == 2
+  - nova_api_enabled.rc == 0
+  - httpd_enabled.rc != 0
+- name: Stop nova_api service (running under httpd)
+  service: name=httpd state=stopped
+  when:
+  - step|int == 2
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- name: Set fact for removal of openstack-nova-api package
+  set_fact:
+    remove_nova_api_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-nova-api package if operator requests it
+  when:
+  - step|int == 2
+  - remove_nova_api_package|bool
+  yum: name=openstack-nova-api state=removed
+- file:
+    path: /var/spool/cron/nova
+    state: absent
+  name: remove old nova cron jobs
+  when: step|int == 2
+- name: Stop and disable nova_conductor service
+  service: name=openstack-nova-conductor state=stopped enabled=no
+  when:
+  - step|int == 2
+  - nova_conductor_enabled.rc == 0
+- name: Set fact for removal of openstack-nova-conductor package
+  set_fact:
+    remove_nova_conductor_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-nova-conductor package if operator requests it
+  when:
+  - step|int == 2
+  - remove_nova_conductor_package|bool
+  yum: name=openstack-nova-conductor state=removed
+- name: Stop and disable nova_consoleauth service
+  service: name=openstack-nova-consoleauth state=stopped enabled=no
+  when:
+  - step|int == 2
+  - nova_consoleauth_enabled.rc == 0
+- name: Set fact for removal of openstack-nova-console package
+  set_fact:
+    remove_nova_console_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-nova-console package if operator requests it
+  when:
+  - step|int == 2
+  - remove_nova_console_package|bool
+  yum: name=openstack-nova-console state=removed
+- name: Stop and disable nova_api service
+  service: name=openstack-nova-api state=stopped enabled=no
+  when:
+  - step|int == 2
+  - nova_metadata_enabled.rc == 0
+- name: Stop and disable nova_placement service (running under httpd)
+  service: name=httpd state=stopped enabled=no
+  when:
+  - step|int == 2
+  - httpd_enabled.rc == 0
+  - httpd_running.rc == 0
+- name: Stop and disable nova_scheduler service
+  service: name=openstack-nova-scheduler state=stopped enabled=no
+  when:
+  - step|int == 2
+  - nova_scheduler_enabled.rc == 0
+- name: Set fact for removal of openstack-nova-scheduler package
+  set_fact:
+    remove_nova_scheduler_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-nova-scheduler package if operator requests it
+  when:
+  - step|int == 2
+  - remove_nova_scheduler_package|bool
+  yum: name=openstack-nova-scheduler state=removed
+- name: Stop and disable nova_vnc_proxy service
+  service: name=openstack-nova-novncproxy state=stopped enabled=no
+  when:
+  - step|int == 2
+  - nova_vncproxy_enabled.rc == 0
+- name: Set fact for removal of openstack-nova-novncproxy package
+  set_fact:
+    remove_nova_novncproxy_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-nova-novncproxy package if operator requests it
+  when:
+  - step|int == 2
+  - remove_nova_novncproxy_package|bool
+  yum: name=openstack-nova-novncproxy state=removed
+- block:
+  - name: Get docker Rabbitmq image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-rabbitmq:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-rabbitmq:pcmklatest
+  - name: Get previous Rabbitmq image id
+    register: rabbitmq_image_id
+    shell: docker images | awk '/rabbitmq.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Rabbitmq image
+      register: rabbitmq_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{rabbitmq_image_id.stdout}}'
+    - name: Remove any container using the same Rabbitmq image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ rabbitmq_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Rabbitmq images
+      shell: docker rmi -f {{rabbitmq_image_id.stdout}}
+    when:
+    - rabbitmq_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Rabbitmq images
+  - name: Retag pcmklatest to latest Rabbitmq image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Retag the pacemaker image if containerized
+  when:
+  - step|int == 2
+  - rabbit_containerized|succeeded
+- block:
+  - command: hiera -c /etc/puppet/hiera.yaml bootstrap_nodeid
+    name: get bootstrap nodeid
+    register: bootstrap_node
+  - name: set is_bootstrap_node fact
+    set_fact: is_bootstrap_node={{bootstrap_node.stdout|lower == ansible_hostname|lower}}
+  - ignore_errors: true
+    name: Check cluster resource status
+    pacemaker_resource:
+      check_mode: true
+      resource: rabbitmq
+      state: started
+    register: rabbitmq_res
+  - block:
+    - name: Disable the rabbitmq cluster resource.
+      pacemaker_resource:
+        resource: rabbitmq
+        state: disable
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    - name: Delete the stopped rabbitmq cluster resource.
+      pacemaker_resource:
+        resource: rabbitmq
+        state: delete
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    when: (is_bootstrap_node) and (rabbitmq_res|succeeded)
+  - name: Disable rabbitmq service
+    service: name=rabbitmq-server enabled=no
+  name: Rabbitmq baremetal to container upgrade tasks
+  when:
+  - step|int == 2
+  - rabbit_containerized|failed
+- block:
+  - name: Get docker Redis image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-redis:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-redis:pcmklatest
+  - name: Get previous Redis image id
+    register: redis_image_id
+    shell: docker images | awk '/redis.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Redis image
+      register: redis_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{redis_image_id.stdout}}'
+    - name: Remove any container using the same Redis image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ redis_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Redis images
+      shell: docker rmi -f {{redis_image_id.stdout}}
+    when:
+    - redis_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Redis images
+  - name: Retag pcmklatest to latest Redis image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Retag the pacemaker image if containerized
+  when:
+  - step|int == 2
+  - redis_containerized|succeeded
+- block:
+  - command: hiera -c /etc/puppet/hiera.yaml bootstrap_nodeid
+    name: get bootstrap nodeid
+    register: bootstrap_node
+    tags: common
+  - name: set is_bootstrap_node fact
+    set_fact: is_bootstrap_node={{bootstrap_node.stdout|lower == ansible_hostname|lower}}
+    tags: common
+  - ignore_errors: true
+    name: Check cluster resource status
+    pacemaker_resource:
+      check_mode: true
+      resource: redis
+      state: master
+    register: redis_res
+  - block:
+    - name: Disable the redis cluster resource
+      pacemaker_resource:
+        resource: redis
+        state: disable
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    - name: Delete the stopped redis cluster resource.
+      pacemaker_resource:
+        resource: redis
+        state: delete
+        wait_for_resource: true
+      register: output
+      retries: 5
+      until: output.rc == 0
+    when: (is_bootstrap_node) and (redis_res|succeeded)
+  - name: Disable redis service
+    service: name=redis enabled=no
+  name: redis baremetal to container upgrade tasks
+  when:
+  - step|int == 2
+  - redis_containerized|failed
+- name: Stop and disable swift-proxy and swift-object-expirer services
+  service: name={{ item.item }} state=stopped enabled=no
+  when:
+  - step|int == 2
+  - item.rc == 0
+  with_items: '{{ swift_proxy_services_enabled.results }}'
+- name: Set fact for removal of openstack-swift-proxy package
+  set_fact:
+    remove_swift_proxy_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-swift-proxy package if operator requests it
+  when:
+  - step|int == 2
+  - remove_swift_proxy_package|bool
+  yum: name=openstack-swift-proxy state=removed
+- name: Stop and disable swift storage services
+  service: name={{ item.item }} state=stopped enabled=no
+  when:
+  - step|int == 2
+  - item.rc == 0
+  with_items: '{{ swift_services_enabled.results }}'
+- name: Set fact for removal of openstack-swift-container,object,account package
+  set_fact:
+    remove_swift_package: false
+  when: step|int == 2
+- ignore_errors: true
+  name: Remove openstack-swift-container,object,account packages if operator requests
+    it
+  when:
+  - step|int == 2
+  - remove_swift_package|bool
+  with_items:
+  - openstack-swift-container
+  - openstack-swift-object
+  - openstack-swift-account
+  yum: name={{ item }} state=removed
+- file: state=absent path=/etc/xinetd.d/rsync
+  name: Remove rsync service from xinetd
+  when: step|int == 2
+- name: Restart xinetd service after rsync removal
+  service: name=xinetd state=restarted
+  when: step|int == 2
+- name: Install docker packages on upgrade if missing
+  when: step|int == 3
+  yum: name=docker state=latest
+- name: Stop pacemaker cluster
+  pacemaker_cluster: state=offline
+  when: step|int == 3
+- args:
+    creates: /etc/sysconfig/ip6tables.n-o-upgrade
+  name: blank ipv6 rule before activating ipv6 firewall.
+  shell: cat /etc/sysconfig/ip6tables > /etc/sysconfig/ip6tables.n-o-upgrade; cat</dev/null>/etc/sysconfig/ip6tables
+  when: step|int == 3
+- name: Check for os-net-config upgrade
+  register: os_net_config_need_upgrade
+  shell: yum check-upgrade | awk '/os-net-config/{print}'
+  when: step|int == 3
+- ignore_errors: true
+  name: Check that os-net-config has configuration
+  register: os_net_config_has_config
+  shell: test -s /etc/os-net-config/config.json
+  when: step|int == 3
+- block:
+  - name: Upgrade os-net-config
+    yum: name=os-net-config state=latest
+  - changed_when: os_net_config_upgrade.rc == 2
+    command: os-net-config --no-activate -c /etc/os-net-config/config.json -v --detailed-exit-codes
+    failed_when: os_net_config_upgrade.rc not in [0,2]
+    name: take new os-net-config parameters into account now
+    register: os_net_config_upgrade
+  when:
+  - step|int == 3
+  - os_net_config_need_upgrade.stdout
+  - os_net_config_has_config.rc == 0
+- name: Update all packages
+  when: step|int == 3
+  yum: name=* state=latest
+- name: Start pacemaker cluster
+  pacemaker_cluster: state=online
+  when: step|int == 4

@@ -1,0 +1,4 @@
+- include_tasks: fast_forward_upgrade_bootstrap_role_tasks.yaml
+  with_sequence: start=4 end=9
+  loop_control:
+    loop_var: step

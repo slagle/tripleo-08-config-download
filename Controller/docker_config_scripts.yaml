@@ -1,0 +1,85 @@
+create_swift_secret.sh:
+  content: "#!/bin/bash\nexport OS_PROJECT_DOMAIN_ID=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster project_domain_id)\nexport OS_USER_DOMAIN_ID=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster user_domain_id)\nexport OS_PROJECT_NAME=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster project_name)\nexport OS_USERNAME=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster username)\nexport OS_PASSWORD=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster password)\nexport OS_AUTH_URL=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster auth_endpoint)\nexport OS_AUTH_TYPE=password\nexport OS_IDENTITY_API_VERSION=3\n\
+    \necho \"Check if secret already exists\"\nsecret_href=$(openstack secret list\
+    \ --name swift_root_secret_uuid)\nrc=$?\nif [[ $rc != 0 ]]; then\n  echo \"Failed\
+    \ to check secrets, check if Barbican in enabled and responding properly\"\n \
+    \ exit $rc;\nfi\nif [ -z \"$secret_href\" ]; then\n  echo \"Create new secret\"\
+    \n  order_href=$(openstack secret order create --name swift_root_secret_uuid --payload-content-type=\"\
+    application/octet-stream\" --algorithm aes --bit-length 256 --mode ctr key -f\
+    \ value -c \"Order href\")\nfi\n"
+  mode: '0700'
+docker_puppet_apply.sh:
+  content: "#!/bin/bash\nset -eux\nSTEP=$1\nTAGS=$2\nCONFIG=$3\nEXTRA_ARGS=${4:-''}\n\
+    if [ -d /tmp/puppet-etc ]; then\n  # ignore copy failures as these may be the\
+    \ same file depending on docker mounts\n  cp -a /tmp/puppet-etc/* /etc/puppet\
+    \ || true\nfi\necho \"{\\\"step\\\": ${STEP}}\" > /etc/puppet/hieradata/docker.json\n\
+    export FACTER_uuid=docker\nset +e\npuppet apply $EXTRA_ARGS \\\n    --verbose\
+    \ \\\n    --detailed-exitcodes \\\n    --summarize \\\n    --color=false \\\n\
+    \    --modulepath /etc/puppet/modules:/opt/stack/puppet-modules:/usr/share/openstack-puppet/modules\
+    \ \\\n    --tags $TAGS \\\n    -e \"${CONFIG}\"\nrc=$?\nset -e\nset +ux\nif [\
+    \ $rc -eq 2 -o $rc -eq 0 ]; then\n    exit 0\nfi\nexit $rc\n"
+  mode: '0700'
+nova_api_discover_hosts.sh:
+  content: "#!/bin/bash\nexport OS_PROJECT_DOMAIN_NAME=$(crudini --get /etc/nova/nova.conf\
+    \ keystone_authtoken project_domain_name)\nexport OS_USER_DOMAIN_NAME=$(crudini\
+    \ --get /etc/nova/nova.conf keystone_authtoken user_domain_name)\nexport OS_PROJECT_NAME=$(crudini\
+    \ --get /etc/nova/nova.conf keystone_authtoken project_name)\nexport OS_USERNAME=$(crudini\
+    \ --get /etc/nova/nova.conf keystone_authtoken username)\nexport OS_PASSWORD=$(crudini\
+    \ --get /etc/nova/nova.conf keystone_authtoken password)\nexport OS_AUTH_URL=$(crudini\
+    \ --get /etc/nova/nova.conf keystone_authtoken auth_url)\nexport OS_AUTH_TYPE=password\n\
+    export OS_IDENTITY_API_VERSION=3\n\necho \"(cellv2) Running cell_v2 host discovery\"\
+    \ntimeout=600\nloop_wait=30\ndeclare -A discoverable_hosts\nfor host in $(hiera\
+    \ -c /etc/puppet/hiera.yaml cellv2_discovery_hosts | sed -e '/^nil$/d' |  tr \"\
+    ,\" \" \"); do discoverable_hosts[$host]=1; done\ntimeout_at=$(( $(date +\"%s\"\
+    ) + ${timeout} ))\necho \"(cellv2) Waiting ${timeout} seconds for hosts to register\"\
+    \nfinished=0\nwhile : ; do\n  for host in $(openstack -q compute service list\
+    \ -c 'Host' -c 'Zone' -f value | awk '$2 != \"internal\" { print $1 }'); do\n\
+    \    if (( discoverable_hosts[$host] == 1 )); then\n      echo \"(cellv2) compute\
+    \ node $host has registered\"\n      unset discoverable_hosts[$host]\n    fi\n\
+    \  done\n  finished=1\n  for host in \"${!discoverable_hosts[@]}\"; do\n    if\
+    \ (( ${discoverable_hosts[$host]} == 1 )); then\n      echo \"(cellv2) compute\
+    \ node $host has not registered\"\n      finished=0\n    fi\n  done\n  remaining=$((\
+    \ $timeout_at - $(date +\"%s\") ))\n  if (( $finished == 1 )); then\n    echo\
+    \ \"(cellv2) All nodes registered\"\n    break\n  elif (( $remaining <= 0 ));\
+    \ then\n    echo \"(cellv2) WARNING: timeout waiting for nodes to register, running\
+    \ host discovery regardless\"\n    echo \"(cellv2) Expected host list:\" $(hiera\
+    \ -c /etc/puppet/hiera.yaml cellv2_discovery_hosts | sed -e '/^nil$/d' | sort\
+    \ -u |  tr ',' ' ')\n    echo \"(cellv2) Detected host list:\" $(openstack -q\
+    \ compute service list -c 'Host' -c 'Zone' -f value | awk '$2 != \"internal\"\
+    \ { print $1 }' | sort -u | tr '\\n', ' ')\n    break\n  else\n    echo \"(cellv2)\
+    \ Waiting ${remaining} seconds for hosts to register\"\n    sleep $loop_wait\n\
+    \  fi\ndone\necho \"(cellv2) Running host discovery...\"\nsu nova -s /bin/bash\
+    \ -c \"/usr/bin/nova-manage cell_v2 discover_hosts --verbose\"\n"
+  mode: '0700'
+nova_api_ensure_default_cell.sh:
+  content: "#!/bin/bash\nDEFID=$(nova-manage cell_v2 list_cells | sed -e '1,3d' -e\
+    \ '$d' | awk -F ' *| *' '$2 == \"default\" {print $4}')\nif [ \"$DEFID\" ]; then\n\
+    \  echo \"(cellv2) Updating default cell_v2 cell $DEFID\"\n  su nova -s /bin/bash\
+    \ -c \"/usr/bin/nova-manage cell_v2 update_cell --cell_uuid $DEFID --name=default\"\
+    \nelse\n  echo \"(cellv2) Creating default cell_v2 cell\"\n  su nova -s /bin/bash\
+    \ -c \"/usr/bin/nova-manage cell_v2 create_cell --name=default\"\nfi\n"
+  mode: '0700'
+set_swift_keymaster_key_id.sh:
+  content: "#!/bin/bash\nexport OS_PROJECT_DOMAIN_ID=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster project_domain_id)\nexport OS_USER_DOMAIN_ID=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster user_domain_id)\nexport OS_PROJECT_NAME=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster project_name)\nexport OS_USERNAME=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster username)\nexport OS_PASSWORD=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster password)\nexport OS_AUTH_URL=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster auth_endpoint)\nexport OS_AUTH_TYPE=password\nexport OS_IDENTITY_API_VERSION=3\n\
+    echo \"retrieve key_id\"\nloop_wait=2\nfor i in {0..5}; do\n  #TODO update uuid\
+    \ from mistral here too\n  secret_href=$(openstack secret list --name swift_root_secret_uuid)\n\
+    \  if [ \"$secret_href\" ]; then\n    echo \"set key_id in keymaster.conf\"\n\
+    \    secret_href=$(openstack secret list --name swift_root_secret_uuid -f value\
+    \ -c \"Secret href\")\n    crudini --set /etc/swift/keymaster.conf kms_keymaster\
+    \ key_id ${secret_href##*/}\n    exit 0\n  else\n    echo \"no key, wait for $loop_wait\
+    \ and check again\"\n    sleep $loop_wait\n    ((loop_wait++))\n  fi\ndone\necho\
+    \ \"Failed to set secret in keymaster.conf, check if Barbican is enabled and responding\
+    \ properly\"\nexit 1\n"
+  mode: '0700'

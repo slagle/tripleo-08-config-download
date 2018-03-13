@@ -1,0 +1,379 @@
+ceilometer::agent::auth::auth_endpoint_type: internalURL
+ceilometer::agent::auth::auth_password: FtXc7xgX8w2EJbXcCe3psFzv4
+ceilometer::agent::auth::auth_project_domain_name: Default
+ceilometer::agent::auth::auth_region: regionOne
+ceilometer::agent::auth::auth_tenant_name: service
+ceilometer::agent::auth::auth_url: http://192.168.24.7:5000
+ceilometer::agent::auth::auth_user_domain_name: Default
+ceilometer::agent::compute::instance_discovery_method: libvirt_metadata
+ceilometer::agent::notification::event_pipeline_publishers:
+- gnocchi://
+- panko://
+ceilometer::agent::notification::manage_event_pipeline: true
+ceilometer::agent::notification::manage_pipeline: false
+ceilometer::agent::notification::pipeline_publishers:
+- gnocchi://
+ceilometer::agent::polling::manage_polling: false
+ceilometer::debug: false
+ceilometer::dispatcher::gnocchi::archive_policy: low
+ceilometer::dispatcher::gnocchi::filter_project: service
+ceilometer::dispatcher::gnocchi::resources_definition_file: gnocchi_resources.yaml
+ceilometer::dispatcher::gnocchi::url: http://192.168.24.7:8041
+ceilometer::host: '%{::fqdn}'
+ceilometer::keystone::authtoken::auth_uri: http://192.168.24.7:5000
+ceilometer::keystone::authtoken::auth_url: http://192.168.24.7:5000
+ceilometer::keystone::authtoken::password: FtXc7xgX8w2EJbXcCe3psFzv4
+ceilometer::keystone::authtoken::project_domain_name: Default
+ceilometer::keystone::authtoken::project_name: service
+ceilometer::keystone::authtoken::user_domain_name: Default
+ceilometer::notification_driver: messagingv2
+ceilometer::rabbit_heartbeat_timeout_threshold: 60
+ceilometer::rabbit_password: HtKmbZvPhP8ThyFQxb3PkTKsC
+ceilometer::rabbit_port: 5672
+ceilometer::rabbit_use_ssl: 'False'
+ceilometer::rabbit_userid: guest
+ceilometer::snmpd_readonly_user_password: cda3740a255af021a3b68fd8bd89f70a2aeb80e1
+ceilometer::snmpd_readonly_username: ro_snmp_user
+ceilometer::telemetry_secret: aw3hrtZzDVBFz99nR2uJJ6rEY
+ceilometer_redis_password: DRMmzyDvmMuhG2AytUCHfpKTW
+cold_migration_ssh_inbound_addr: internal_api
+compute_namespace: true
+kernel_modules:
+  nf_conntrack: {}
+  nf_conntrack_proto_sctp: {}
+live_migration_ssh_inbound_addr: internal_api
+neutron::agents::ml2::ovs::arp_responder: false
+neutron::agents::ml2::ovs::bridge_mappings:
+- datacentre:br-ex
+neutron::agents::ml2::ovs::enable_distributed_routing: false
+neutron::agents::ml2::ovs::extensions:
+- qos
+neutron::agents::ml2::ovs::l2_population: 'False'
+neutron::agents::ml2::ovs::local_ip: tenant
+neutron::agents::ml2::ovs::tunnel_types:
+- vxlan
+neutron::allow_overlapping_ips: true
+neutron::core_plugin: ml2
+neutron::db::database_db_max_retries: -1
+neutron::db::database_max_retries: -1
+neutron::db::sync::db_sync_timeout: 300
+neutron::db::sync::extra_params: ''
+neutron::debug: false
+neutron::dhcp_agent_notification: true
+neutron::dns_domain: openstacklocal
+neutron::global_physnet_mtu: 1500
+neutron::host: '%{::fqdn}'
+neutron::notification_driver: messagingv2
+neutron::plugins::ml2::extension_drivers:
+- qos
+- port_security
+neutron::plugins::ml2::firewall_driver: iptables_hybrid
+neutron::plugins::ml2::flat_networks:
+- datacentre
+neutron::plugins::ml2::mechanism_drivers:
+- openvswitch
+neutron::plugins::ml2::network_vlan_ranges:
+- datacentre:1:1000
+neutron::plugins::ml2::overlay_ip_version: 4
+neutron::plugins::ml2::tenant_network_types:
+- vxlan
+neutron::plugins::ml2::tunnel_id_ranges:
+- 1:4094
+neutron::plugins::ml2::type_drivers:
+- vxlan
+- vlan
+- flat
+- gre
+neutron::plugins::ml2::vni_ranges:
+- 1:4094
+neutron::purge_config: false
+neutron::rabbit_heartbeat_timeout_threshold: 60
+neutron::rabbit_password: HtKmbZvPhP8ThyFQxb3PkTKsC
+neutron::rabbit_port: 5672
+neutron::rabbit_use_ssl: 'False'
+neutron::rabbit_user: guest
+neutron::service_plugins:
+- router
+- qos
+- trunk
+nova::api_database_connection: mysql+pymysql://nova_api:ePtbUHubCqvanb7c8da8AAupz@192.168.24.7/nova_api?read_default_group=tripleo&read_default_file=/etc/my.cnf.d/tripleo.cnf
+nova::cell0_database_connection: mysql+pymysql://nova:ePtbUHubCqvanb7c8da8AAupz@192.168.24.7/nova_cell0?read_default_group=tripleo&read_default_file=/etc/my.cnf.d/tripleo.cnf
+nova::cinder_catalog_info: volumev3:cinderv3:internalURL
+nova::compute::consecutive_build_service_disable_threshold: '10'
+nova::compute::instance_usage_audit: true
+nova::compute::instance_usage_audit_period: hour
+nova::compute::libvirt::libvirt_enabled_perf_events: []
+nova::compute::libvirt::libvirt_virt_type: kvm
+nova::compute::libvirt::manage_libvirt_services: false
+nova::compute::libvirt::migration_support: false
+nova::compute::libvirt::qemu::configure_qemu: true
+nova::compute::libvirt::qemu::max_files: 32768
+nova::compute::libvirt::qemu::max_processes: 131072
+nova::compute::libvirt::services::libvirt_virt_type: kvm
+nova::compute::libvirt::vncserver_listen: internal_api
+nova::compute::neutron::libvirt_vif_driver: ''
+nova::compute::pci::passthrough: ''
+nova::compute::rbd::ephemeral_storage: false
+nova::compute::rbd::libvirt_images_rbd_ceph_conf: /etc/ceph/ceph.conf
+nova::compute::rbd::libvirt_images_rbd_pool: vms
+nova::compute::rbd::libvirt_rbd_secret_key: AQBAmHtaAAAAABAAFdts6gCMLXSCo5IhAC+hGA==
+nova::compute::rbd::libvirt_rbd_secret_uuid: 22f50ba8-0c66-11e8-975e-009f0adb7cdc
+nova::compute::rbd::libvirt_rbd_user: openstack
+nova::compute::rbd::rbd_keyring: client.openstack
+nova::compute::reserved_host_memory: 4096
+nova::compute::vcpu_pin_set: []
+nova::compute::verify_glance_signatures: false
+nova::compute::vncproxy_host: 192.168.24.7
+nova::compute::vncserver_proxyclient_address: internal_api
+nova::cron::archive_deleted_rows::destination: /var/log/nova/nova-rowsflush.log
+nova::cron::archive_deleted_rows::hour: '0'
+nova::cron::archive_deleted_rows::max_rows: '100'
+nova::cron::archive_deleted_rows::minute: '1'
+nova::cron::archive_deleted_rows::month: '*'
+nova::cron::archive_deleted_rows::monthday: '*'
+nova::cron::archive_deleted_rows::until_complete: false
+nova::cron::archive_deleted_rows::user: nova
+nova::cron::archive_deleted_rows::weekday: '*'
+nova::database_connection: mysql+pymysql://nova:ePtbUHubCqvanb7c8da8AAupz@192.168.24.7/nova?read_default_group=tripleo&read_default_file=/etc/my.cnf.d/tripleo.cnf
+nova::db::database_db_max_retries: -1
+nova::db::database_max_retries: -1
+nova::db::sync::db_sync_timeout: 300
+nova::db::sync_api::db_sync_timeout: 300
+nova::debug: false
+nova::glance_api_servers: http://192.168.24.7:9292
+nova::host: '%{::fqdn}'
+nova::migration::live_migration_tunnelled: false
+nova::my_ip: internal_api
+nova::network::neutron::dhcp_domain: ''
+nova::network::neutron::neutron_auth_type: v3password
+nova::network::neutron::neutron_auth_url: http://192.168.24.7:35357/v3
+nova::network::neutron::neutron_ovs_bridge: br-int
+nova::network::neutron::neutron_password: 22PeyXGFu7qJevbd3VtKnTeh3
+nova::network::neutron::neutron_project_name: service
+nova::network::neutron::neutron_region_name: regionOne
+nova::network::neutron::neutron_url: http://192.168.24.7:9696
+nova::network::neutron::neutron_username: neutron
+nova::notification_driver: messagingv2
+nova::notification_format: unversioned
+nova::notify_on_state_change: vm_and_task_state
+nova::placement::auth_url: http://192.168.24.7:5000
+nova::placement::os_interface: internal
+nova::placement::os_region_name: regionOne
+nova::placement::password: ePtbUHubCqvanb7c8da8AAupz
+nova::placement::project_name: service
+nova::placement_database_connection: mysql+pymysql://nova_placement:ePtbUHubCqvanb7c8da8AAupz@192.168.24.7/nova_placement?read_default_group=tripleo&read_default_file=/etc/my.cnf.d/tripleo.cnf
+nova::purge_config: false
+nova::rabbit_heartbeat_timeout_threshold: 60
+nova::rabbit_password: HtKmbZvPhP8ThyFQxb3PkTKsC
+nova::rabbit_port: 5672
+nova::rabbit_use_ssl: 'False'
+nova::rabbit_userid: guest
+nova::use_ipv6: false
+nova::vncproxy::common::vncproxy_host: 192.168.24.7
+nova::vncproxy::common::vncproxy_port: '6080'
+nova::vncproxy::common::vncproxy_protocol: http
+ntp::iburst_enable: true
+'ntp::maxpoll:': 10
+'ntp::minpoll:': 6
+ntp::servers:
+- clock.redhat.com
+rbd_persistent_storage: false
+snmp::agentaddress:
+- udp:161
+- udp6:[::1]:161
+snmp::snmpd_options: -LS0-5d
+snmpd_network: internal_api_subnet
+sysctl_settings:
+  fs.inotify.max_user_instances:
+    value: 1024
+  fs.suid_dumpable:
+    value: 0
+  kernel.dmesg_restrict:
+    value: 1
+  kernel.pid_max:
+    value: 1048576
+  net.core.netdev_max_backlog:
+    value: 10000
+  net.ipv4.conf.all.arp_accept:
+    value: 1
+  net.ipv4.conf.all.log_martians:
+    value: 1
+  net.ipv4.conf.all.secure_redirects:
+    value: 0
+  net.ipv4.conf.all.send_redirects:
+    value: 0
+  net.ipv4.conf.default.accept_redirects:
+    value: 0
+  net.ipv4.conf.default.log_martians:
+    value: 1
+  net.ipv4.conf.default.secure_redirects:
+    value: 0
+  net.ipv4.conf.default.send_redirects:
+    value: 0
+  net.ipv4.ip_forward:
+    value: 1
+  net.ipv4.neigh.default.gc_thresh1:
+    value: 1024
+  net.ipv4.neigh.default.gc_thresh2:
+    value: 2048
+  net.ipv4.neigh.default.gc_thresh3:
+    value: 4096
+  net.ipv4.tcp_keepalive_intvl:
+    value: 1
+  net.ipv4.tcp_keepalive_probes:
+    value: 5
+  net.ipv4.tcp_keepalive_time:
+    value: 5
+  net.ipv6.conf.all.accept_ra:
+    value: 0
+  net.ipv6.conf.all.accept_redirects:
+    value: 0
+  net.ipv6.conf.all.autoconf:
+    value: 0
+  net.ipv6.conf.all.disable_ipv6:
+    value: 0
+  net.ipv6.conf.default.accept_ra:
+    value: 0
+  net.ipv6.conf.default.accept_redirects:
+    value: 0
+  net.ipv6.conf.default.autoconf:
+    value: 0
+  net.ipv6.conf.default.disable_ipv6:
+    value: 0
+  net.netfilter.nf_conntrack_max:
+    value: 500000
+  net.nf_conntrack_max:
+    value: 500000
+timezone::timezone: UTC
+tripleo.neutron_ovs_agent.firewall_rules:
+  118 neutron vxlan networks:
+    dport: 4789
+    proto: udp
+  136 neutron gre networks:
+    proto: gre
+tripleo.nova_libvirt.firewall_rules:
+  200 nova_libvirt:
+    dport:
+    - 16514
+    - 49152-49215
+    - 5900-6923
+tripleo.nova_migration_target.firewall_rules:
+  113 nova_migration_target:
+    dport:
+    - 2022
+tripleo.ntp.firewall_rules:
+  105 ntp:
+    dport: 123
+    proto: udp
+tripleo.snmp.firewall_rules:
+  124 snmp:
+    dport: 161
+    proto: udp
+    source: '%{hiera(''snmpd_network'')}'
+tripleo::firewall::manage_firewall: true
+tripleo::firewall::purge_firewall_rules: false
+tripleo::packages::enable_install: false
+tripleo::profile::base::certmonger_user::libvirt_postsave_cmd: 'true'
+tripleo::profile::base::database::mysql::client::enable_ssl: false
+tripleo::profile::base::database::mysql::client::mysql_client_bind_address: internal_api
+tripleo::profile::base::database::mysql::client::ssl_ca: /etc/ipa/ca.crt
+tripleo::profile::base::docker::configure_network: true
+tripleo::profile::base::docker::debug: false
+tripleo::profile::base::docker::docker_options: --log-driver=journald --signature-verification=false
+  --iptables=false --live-restore
+tripleo::profile::base::docker::network_options: --bip=172.31.0.1/24
+tripleo::profile::base::nova::compute::cinder_nfs_backend: false
+tripleo::profile::base::nova::migration::client::libvirt_enabled: true
+tripleo::profile::base::nova::migration::client::nova_compute_enabled: true
+tripleo::profile::base::nova::migration::client::ssh_port: 2022
+tripleo::profile::base::nova::migration::client::ssh_private_key: '-----BEGIN RSA
+  PRIVATE KEY-----
+
+  MIIEpgIBAAKCAQEArcpd5eXsQqQo5CUMCBLWrN5E+4amqCm0HjOmrGU7mcDrmqy3
+
+  1/buCfOn+rYRq3ZMkoEeZS0cNZaLk+0MNvU80MJeFvGIPNljdcjq06lC0Aba0Cap
+
+  iN6jDOQqy08q1wEiPqZ4zkxBouUASqFtZ1z5TFOQYKLb8F0KIw0hBpEl59IC5Qlv
+
+  AfklgRtAIGEqpyVwp0EXc4hyaZzSjYY2V9PIlOldRSSWYKx3/u5Qjk4V0uY0SwZ3
+
+  VI2A3XfxjtE+fWgkmqqrZcO3Jx316T/WqzAn8P7rvReFJedikIvP18GDZu1HsIrM
+
+  0OTmV0QEMszZl0c+eY2FECZLK1QLQFxqq1/+IQIDAQABAoIBAQCb+R1gsYPjI3XX
+
+  nDA6Jr4ok6uRmn2EOzl+SZjy7EAbc/t/7DdrSiDFKbq+1hzxp9B9RAjFgUDqD1zh
+
+  vEPUJzEXovnS2Z8ODYSoN1QZ9rUSArTrT2ekgTwQ285UfY7TPB9B3yJY9DOMQL6M
+
+  PGj19YmAqRbQxBlklfv9DVFwlWBRtrx8MN+Qi1jlx2xmcLNHEJgjTcjIR5nOe+sh
+
+  uVt4kn+bPn5j1iGpG2dKIN/GESveOEtFbUZB5Q6GwEOJfTP5eptJV8gTAlm+9RCQ
+
+  SaKlKOONoWTW17IQvYhDsUHJmwpIc2cOA6ZMzEgjxyQN7myycznUY0yWfNGVCd0p
+
+  s8t+pDApAoGBAOI58602ydQ/Q+PCQsPTOjAo6b0PT//1hxfVcKvAH+0Vv5rDX8yf
+
+  BzAXzpHFH9gjM5U5l/vPOSEpbDuyEhjaKxSXJewy93Z5PR7qj/GXSG0oOOpYdXVJ
+
+  LkY1/3IjA8ESt/F0Vt6h6E5z4BPw71lG7ANZmFpo5Y1gFk+YRrA3fIh7AoGBAMSp
+
+  vRCOsyVGiltyDoRASSm4320q4VQx9KBqKA9eE6lvuqK7nmA9bGtVXqw9kZJpuBBn
+
+  8kZa+88m5Mf8ntiEyVrSu2po+YybC9XC+J6ZnzcjmGzKyCIEv+VpikMBLLYQ6asD
+
+  kPUaF7Rp5n59RgakkS6k0H0tCjJaH9tyzqX1q4cTAoGBAKoGtEYzL23+PqAnmNZl
+
+  Iw6fMU2O/Kl7d5VKLexn8ZbXCbLftFiuDVDwE6krZsujaVl2d+whyuZJo7caFs/m
+
+  6QoIr8/eXm8EoBNkZ9tDwIOJ/3ziDyWfYtASNXMrLd8mmmk27zNUrKyKGpfiNYH7
+
+  89ZwuDj7Lcwbs6kO4dH/YfGRAoGBALph38Q0acYXD4NRGj7uqig3hNByhjEEU0JA
+
+  uYyu7VV0hV47EANH01v6AYqdozwuo3ow+WUCT4no44RBf83WMvq3o1Va/b7rJpFF
+
+  gdjV4RYhzxC0Mm5DMBbdKmMMVvKKHtqru5L/Up3yi7cvRNGA3/Nj0hAAQpyr22tg
+
+  aEbTCOgvAoGBAMaXEUEvohFLyhBFG+RDCF7WMbXBvgd53N2KRLfBj1hE/MIBn2zW
+
+  kcb+Yl4Q5J4Xfc16SEZuJvSPZiXAwhAxzMRg5IlG1KC/69cihR6NoByiGkm0zG7f
+
+  uRDRk1ar57QAOwJiupTk2Axx/S14wxBTaCyC446xnFlky2Xm8V+g7M22
+
+  -----END RSA PRIVATE KEY-----
+
+  '
+tripleo::profile::base::nova::migration::target::ssh_authorized_keys:
+- ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtyl3l5exCpCjkJQwIEtas3kT7hqaoKbQeM6asZTuZwOuarLfX9u4J86f6thGrdkySgR5lLRw1louT7Qw29TzQwl4W8Yg82WN1yOrTqULQBtrQJqmI3qMM5CrLTyrXASI+pnjOTEGi5QBKoW1nXPlMU5BgotvwXQojDSEGkSXn0gLlCW8B+SWBG0AgYSqnJXCnQRdziHJpnNKNhjZX08iU6V1FJJZgrHf+7lCOThXS5jRLBndUjYDdd/GO0T59aCSaqqtlw7cnHfXpP9arMCfw/uu9F4Ul52KQi8/XwYNm7UewiszQ5OZXRAQyzNmXRz55jYUQJksrVAtAXGqrX/4h
+  Generated by TripleO
+tripleo::profile::base::nova::migration::target::ssh_localaddrs:
+- '%{hiera(''cold_migration_ssh_inbound_addr'')}'
+- '%{hiera(''live_migration_ssh_inbound_addr'')}'
+tripleo::profile::base::snmp::snmpd_password: cda3740a255af021a3b68fd8bd89f70a2aeb80e1
+tripleo::profile::base::snmp::snmpd_user: ro_snmp_user
+tripleo::profile::base::sshd::bannertext: ''
+tripleo::profile::base::sshd::motd: ''
+tripleo::profile::base::sshd::options:
+  AcceptEnv:
+  - LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES
+  - LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT
+  - LC_IDENTIFICATION LC_ALL LANGUAGE
+  - XMODIFIERS
+  AuthorizedKeysFile: .ssh/authorized_keys
+  ChallengeResponseAuthentication: 'no'
+  GSSAPIAuthentication: 'yes'
+  GSSAPICleanupCredentials: 'no'
+  HostKey:
+  - /etc/ssh/ssh_host_rsa_key
+  - /etc/ssh/ssh_host_ecdsa_key
+  - /etc/ssh/ssh_host_ed25519_key
+  PasswordAuthentication: 'no'
+  Subsystem: sftp  /usr/libexec/openssh/sftp-server
+  SyslogFacility: AUTHPRIV
+  UseDNS: 'no'
+  UsePAM: 'yes'
+  UsePrivilegeSeparation: sandbox
+  X11Forwarding: 'yes'
+tripleo::profile::base::sshd::port: 22
+tripleo::profile::base::tuned::profile: ''
+tripleo::trusted_cas::ca_map: {}
+vswitch::ovs::enable_hw_offload: false

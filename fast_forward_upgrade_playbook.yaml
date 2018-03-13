@@ -1,0 +1,9 @@
+- become: true
+  hosts: overcloud
+  tasks:
+  - include_tasks: fast_forward_upgrade_release_tasks.yaml
+    loop_control:
+      loop_var: release
+    with_items:
+    - ocata
+    - pike

@@ -1,0 +1,297 @@
+- config_image: docker.io/tripleomaster/centos-binary-aodh-api:current-tripleo
+  config_volume: aodh
+  puppet_tags: aodh_api_paste_ini,aodh_config
+  step_config: 'include tripleo::profile::base::aodh::api
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-aodh-api:current-tripleo
+  config_volume: aodh
+  puppet_tags: aodh_config
+  step_config: 'include tripleo::profile::base::aodh::evaluator
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-aodh-api:current-tripleo
+  config_volume: aodh
+  puppet_tags: aodh_config
+  step_config: 'include tripleo::profile::base::aodh::listener
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-aodh-api:current-tripleo
+  config_volume: aodh
+  puppet_tags: aodh_config
+  step_config: 'include tripleo::profile::base::aodh::notifier
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-ceilometer-central:current-tripleo
+  config_volume: ceilometer
+  puppet_tags: ceilometer_config
+  step_config: 'include ::tripleo::profile::base::ceilometer::agent::polling
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-ceilometer-central:current-tripleo
+  config_volume: ceilometer
+  puppet_tags: ceilometer_config
+  step_config: 'include ::tripleo::profile::base::ceilometer::agent::notification
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-cinder-api:current-tripleo
+  config_volume: cinder
+  puppet_tags: cinder_config,file,concat,file_line
+  step_config: 'include ::tripleo::profile::base::cinder::api
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-cinder-api:current-tripleo
+  config_volume: cinder
+  puppet_tags: cinder_config,file,concat,file_line
+  step_config: 'include ::tripleo::profile::base::cinder::scheduler
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-cinder-api:current-tripleo
+  config_volume: cinder
+  puppet_tags: cinder_config,file,concat,file_line
+  step_config: 'include ::tripleo::profile::base::lvm
+
+    include ::tripleo::profile::base::cinder::volume
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-mariadb:current-tripleo
+  config_volume: clustercheck
+  puppet_tags: file
+  step_config: include ::tripleo::profile::pacemaker::clustercheck
+- config_image: docker.io/tripleomaster/centos-binary-glance-api:current-tripleo
+  config_volume: glance_api
+  puppet_tags: glance_api_config,glance_api_paste_ini,glance_swift_config,glance_cache_config
+  step_config: 'include ::tripleo::profile::base::glance::api
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-gnocchi-api:current-tripleo
+  config_volume: gnocchi
+  puppet_tags: gnocchi_api_paste_ini,gnocchi_config
+  step_config: 'include ::tripleo::profile::base::gnocchi::api
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-gnocchi-api:current-tripleo
+  config_volume: gnocchi
+  puppet_tags: gnocchi_config
+  step_config: 'include ::tripleo::profile::base::gnocchi::metricd
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-gnocchi-api:current-tripleo
+  config_volume: gnocchi
+  puppet_tags: gnocchi_config
+  step_config: 'include ::tripleo::profile::base::gnocchi::statsd
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-haproxy:current-tripleo
+  config_volume: haproxy
+  puppet_tags: haproxy_config
+  step_config: 'exec {''wait-for-settle'': command => ''/bin/true'' }
+
+    class tripleo::firewall(){}; define tripleo::firewall::rule( $port = undef, $dport
+    = undef, $sport = undef, $proto = undef, $action = undef, $state = undef, $source
+    = undef, $iniface = undef, $chain = undef, $destination = undef, $extras = undef){}
+
+    [''pcmk_bundle'', ''pcmk_resource'', ''pcmk_property'', ''pcmk_constraint'', ''pcmk_resource_default''].each
+    |String $val| { noop_resource($val) }
+
+    include ::tripleo::profile::pacemaker::haproxy_bundle'
+  volumes:
+  - /etc/ipa/ca.crt:/etc/ipa/ca.crt:ro
+  - /etc/pki/tls/private/haproxy:/etc/pki/tls/private/haproxy:ro
+  - /etc/pki/tls/certs/haproxy:/etc/pki/tls/certs/haproxy:ro
+  - /etc/pki/tls/private/overcloud_endpoint.pem:/etc/pki/tls/private/overcloud_endpoint.pem:ro
+- config_image: docker.io/tripleomaster/centos-binary-heat-api:current-tripleo
+  config_volume: heat_api
+  puppet_tags: heat_config,file,concat,file_line
+  step_config: 'include ::tripleo::profile::base::heat::api
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-heat-api-cfn:current-tripleo
+  config_volume: heat_api_cfn
+  puppet_tags: heat_config,file,concat,file_line
+  step_config: 'include ::tripleo::profile::base::heat::api_cfn
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-heat-api:current-tripleo
+  config_volume: heat
+  puppet_tags: heat_config,file,concat,file_line
+  step_config: 'include ::tripleo::profile::base::heat::engine
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-horizon:current-tripleo
+  config_volume: horizon
+  puppet_tags: horizon_config
+  step_config: 'include ::tripleo::profile::base::horizon
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-iscsid:current-tripleo
+  config_volume: iscsid
+  puppet_tags: iscsid_config
+  step_config: include ::tripleo::profile::base::iscsid
+  volumes:
+  - /etc/iscsi:/etc/iscsi
+- config_image: docker.io/tripleomaster/centos-binary-keystone:current-tripleo
+  config_volume: keystone
+  puppet_tags: keystone_config,keystone_domain_config
+  step_config: '[''Keystone_user'', ''Keystone_endpoint'', ''Keystone_domain'', ''Keystone_tenant'',
+    ''Keystone_user_role'', ''Keystone_role'', ''Keystone_service''].each |String
+    $val| { noop_resource($val) }
+
+    include ::tripleo::profile::base::keystone
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-memcached:current-tripleo
+  config_volume: memcached
+  puppet_tags: file
+  step_config: 'include ::tripleo::profile::base::memcached
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-mariadb:current-tripleo
+  config_volume: mysql
+  puppet_tags: file
+  step_config: '[''Mysql_datadir'', ''Mysql_user'', ''Mysql_database'', ''Mysql_grant'',
+    ''Mysql_plugin''].each |String $val| { noop_resource($val) }
+
+    exec {''wait-for-settle'': command => ''/bin/true'' }
+
+    include ::tripleo::profile::pacemaker::database::mysql_bundle'
+- config_image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+  config_volume: neutron
+  puppet_tags: neutron_config,neutron_api_config
+  step_config: 'include tripleo::profile::base::neutron::server
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+  config_volume: neutron
+  puppet_tags: neutron_plugin_ml2
+  step_config: 'include ::tripleo::profile::base::neutron::plugins::ml2
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+  config_volume: neutron
+  puppet_tags: neutron_config,neutron_dhcp_agent_config
+  step_config: 'include tripleo::profile::base::neutron::dhcp
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+  config_volume: neutron
+  puppet_tags: neutron_config,neutron_l3_agent_config
+  step_config: 'include tripleo::profile::base::neutron::l3
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+  config_volume: neutron
+  puppet_tags: neutron_config,neutron_metadata_agent_config
+  step_config: 'include tripleo::profile::base::neutron::metadata
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+  config_volume: neutron
+  puppet_tags: neutron_config,neutron_agent_ovs,neutron_plugin_ml2
+  step_config: 'include ::tripleo::profile::base::neutron::ovs
+
+    '
+  volumes:
+  - /lib/modules:/lib/modules:ro
+  - /run/openvswitch:/run/openvswitch
+- config_image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+  config_volume: nova
+  puppet_tags: nova_config
+  step_config: '[''Nova_cell_v2''].each |String $val| { noop_resource($val) }
+
+    include tripleo::profile::base::nova::api
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+  config_volume: nova
+  puppet_tags: nova_config
+  step_config: 'include tripleo::profile::base::nova::conductor
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+  config_volume: nova
+  puppet_tags: nova_config
+  step_config: 'include tripleo::profile::base::nova::consoleauth
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+  config_volume: nova
+  puppet_tags: nova_config
+  step_config: ''
+- config_image: docker.io/tripleomaster/centos-binary-nova-placement-api:current-tripleo
+  config_volume: nova_placement
+  puppet_tags: nova_config
+  step_config: 'include tripleo::profile::base::nova::placement
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+  config_volume: nova
+  puppet_tags: nova_config
+  step_config: 'include tripleo::profile::base::nova::scheduler
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+  config_volume: nova
+  puppet_tags: nova_config
+  step_config: 'include tripleo::profile::base::nova::vncproxy
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-cron:current-tripleo
+  config_volume: crond
+  step_config: include ::tripleo::profile::base::logging::logrotate
+- config_image: docker.io/tripleomaster/centos-binary-panko-api:current-tripleo
+  config_volume: panko
+  puppet_tags: panko_api_paste_ini,panko_config
+  step_config: 'include tripleo::profile::base::panko::api
+
+
+    include ::tripleo::profile::base::database::mysql::client'
+- config_image: docker.io/tripleomaster/centos-binary-rabbitmq:current-tripleo
+  config_volume: rabbitmq
+  puppet_tags: file
+  step_config: '[''Rabbitmq_policy'', ''Rabbitmq_user''].each |String $val| { noop_resource($val)
+    }
+
+    include ::tripleo::profile::base::rabbitmq
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-redis:current-tripleo
+  config_volume: redis
+  puppet_tags: exec
+  step_config: include ::tripleo::profile::pacemaker::database::redis_bundle
+- config_image: docker.io/tripleomaster/centos-binary-swift-proxy-server:current-tripleo
+  config_volume: swift
+  puppet_tags: swift_config,swift_proxy_config,swift_keymaster_config
+  step_config: 'include ::tripleo::profile::base::swift::proxy
+
+    '
+- config_image: docker.io/tripleomaster/centos-binary-swift-proxy-server:current-tripleo
+  config_volume: swift_ringbuilder
+  puppet_tags: exec,fetch_swift_ring_tarball,extract_swift_ring_tarball,ring_object_device,swift::ringbuilder::create,tripleo::profile::base::swift::add_devices,swift::ringbuilder::rebalance,create_swift_ring_tarball,upload_swift_ring_tarball
+  step_config: include ::tripleo::profile::base::swift::ringbuilder
+- config_image: docker.io/tripleomaster/centos-binary-swift-proxy-server:current-tripleo
+  config_volume: swift
+  puppet_tags: swift_config,swift_container_config,swift_container_sync_realms_config,swift_account_config,swift_object_config,swift_object_expirer_config,rsync::server
+  step_config: 'include ::tripleo::profile::base::swift::storage
+
+
+    class xinetd() {}'

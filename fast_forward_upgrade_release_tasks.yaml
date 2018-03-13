@@ -1,0 +1,2 @@
+- include_tasks: fast_forward_upgrade_prep_tasks.yaml
+- include_tasks: fast_forward_upgrade_bootstrap_tasks.yaml

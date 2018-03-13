@@ -1,0 +1,743 @@
+/var/lib/kolla/config_files/aodh_api.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: aodh:aodh
+    path: /var/log/aodh
+    recurse: true
+/var/lib/kolla/config_files/aodh_evaluator.json:
+  command: /usr/bin/aodh-evaluator
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: aodh:aodh
+    path: /var/log/aodh
+    recurse: true
+/var/lib/kolla/config_files/aodh_listener.json:
+  command: /usr/bin/aodh-listener
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: aodh:aodh
+    path: /var/log/aodh
+    recurse: true
+/var/lib/kolla/config_files/aodh_notifier.json:
+  command: /usr/bin/aodh-notifier
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: aodh:aodh
+    path: /var/log/aodh
+    recurse: true
+/var/lib/kolla/config_files/ceilometer_agent_central.json:
+  command: /usr/bin/ceilometer-polling --polling-namespaces central --logfile /var/log/ceilometer/central.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/ceilometer_agent_notification.json:
+  command: /usr/bin/ceilometer-agent-notification --logfile /var/log/ceilometer/agent-notification.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-panko/*
+  permissions:
+  - owner: root:ceilometer
+    path: /etc/panko
+    recurse: true
+/var/lib/kolla/config_files/cinder_api.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: cinder:cinder
+    path: /var/log/cinder
+    recurse: true
+/var/lib/kolla/config_files/cinder_api_cron.json:
+  command: /usr/sbin/crond -n
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: cinder:cinder
+    path: /var/log/cinder
+    recurse: true
+/var/lib/kolla/config_files/cinder_scheduler.json:
+  command: /usr/bin/cinder-scheduler --config-file /usr/share/cinder/cinder-dist.conf
+    --config-file /etc/cinder/cinder.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: cinder:cinder
+    path: /var/log/cinder
+    recurse: true
+/var/lib/kolla/config_files/cinder_volume.json:
+  command: /usr/bin/cinder-volume --config-file /usr/share/cinder/cinder-dist.conf
+    --config-file /etc/cinder/cinder.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  - dest: /etc/iscsi/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-iscsid/*
+  permissions:
+  - owner: cinder:cinder
+    path: /var/log/cinder
+    recurse: true
+/var/lib/kolla/config_files/clustercheck.json:
+  command: /usr/sbin/xinetd -dontfork
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/glance_api.json:
+  command: /usr/bin/glance-api --config-file /usr/share/glance/glance-api-dist.conf
+    --config-file /etc/glance/glance-api.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: glance:glance
+    path: /var/lib/glance
+    recurse: true
+  - owner: glance:glance
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/glance_api_tls_proxy.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/gnocchi_api.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: gnocchi:gnocchi
+    path: /var/log/gnocchi
+    recurse: true
+  - owner: gnocchi:gnocchi
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/gnocchi_db_sync.json:
+  command: /usr/bin/gnocchi-upgrade --sacks-number=128
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: gnocchi:gnocchi
+    path: /var/log/gnocchi
+    recurse: true
+  - owner: gnocchi:gnocchi
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/gnocchi_metricd.json:
+  command: /usr/bin/gnocchi-metricd
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: gnocchi:gnocchi
+    path: /var/log/gnocchi
+    recurse: true
+  - owner: gnocchi:gnocchi
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/gnocchi_statsd.json:
+  command: /usr/bin/gnocchi-statsd
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: gnocchi:gnocchi
+    path: /var/log/gnocchi
+    recurse: true
+  - owner: gnocchi:gnocchi
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/haproxy.json:
+  command: /usr/sbin/haproxy-systemd-wrapper -f /etc/haproxy/haproxy.cfg
+  config_files:
+  - dest: /
+    merge: true
+    optional: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /
+    merge: true
+    optional: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-tls/*
+  permissions:
+  - optional: true
+    owner: haproxy:haproxy
+    path: /etc/pki/tls/certs/haproxy/*
+    perm: '0600'
+  - optional: true
+    owner: haproxy:haproxy
+    path: /etc/pki/tls/private/haproxy/*
+    perm: '0600'
+/var/lib/kolla/config_files/heat_api.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: heat:heat
+    path: /var/log/heat
+    recurse: true
+/var/lib/kolla/config_files/heat_api_cfn.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: heat:heat
+    path: /var/log/heat
+    recurse: true
+/var/lib/kolla/config_files/heat_api_cron.json:
+  command: /usr/sbin/crond -n
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: heat:heat
+    path: /var/log/heat
+    recurse: true
+/var/lib/kolla/config_files/heat_engine.json:
+  command: '/usr/bin/heat-engine --config-file /usr/share/heat/heat-dist.conf --config-file
+    /etc/heat/heat.conf '
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: heat:heat
+    path: /var/log/heat
+    recurse: true
+/var/lib/kolla/config_files/horizon.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: apache:apache
+    path: /var/log/horizon/
+    recurse: true
+  - owner: apache:apache
+    path: /etc/openstack-dashboard/
+    recurse: true
+  - owner: apache:apache
+    path: /usr/share/openstack-dashboard/openstack_dashboard/local/
+    recurse: false
+  - owner: apache:apache
+    path: /usr/share/openstack-dashboard/openstack_dashboard/local/local_settings.d/
+    recurse: false
+/var/lib/kolla/config_files/iscsid.json:
+  command: /usr/sbin/iscsid -f
+  config_files:
+  - dest: /etc/iscsi/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-iscsid/*
+/var/lib/kolla/config_files/keystone.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/keystone_cron.json:
+  command: /usr/sbin/crond -n
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: keystone:keystone
+    path: /var/log/keystone
+    recurse: true
+/var/lib/kolla/config_files/logrotate-crond.json:
+  command: /usr/sbin/crond -s -n
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/mysql.json:
+  command: /usr/sbin/pacemaker_remoted
+  config_files:
+  - dest: /etc/libqb/force-filesystem-sockets
+    owner: root
+    perm: '0644'
+    source: /dev/null
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /
+    merge: true
+    optional: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-tls/*
+  permissions:
+  - optional: true
+    owner: mysql:mysql
+    path: /etc/pki/tls/certs/mysql.crt
+    perm: '0600'
+  - optional: true
+    owner: mysql:mysql
+    path: /etc/pki/tls/private/mysql.key
+    perm: '0600'
+/var/lib/kolla/config_files/neutron_api.json:
+  command: /usr/bin/neutron-server --config-file /usr/share/neutron/neutron-dist.conf
+    --config-dir /usr/share/neutron/server --config-file /etc/neutron/neutron.conf
+    --config-file /etc/neutron/plugin.ini --config-dir /etc/neutron/conf.d/common
+    --config-dir /etc/neutron/conf.d/neutron-server --log-file=/var/log/neutron/server.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: neutron:neutron
+    path: /var/log/neutron
+    recurse: true
+/var/lib/kolla/config_files/neutron_dhcp.json:
+  command: /usr/bin/neutron-dhcp-agent --config-file /usr/share/neutron/neutron-dist.conf
+    --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/dhcp_agent.ini
+    --config-dir /etc/neutron/conf.d/common --config-dir /etc/neutron/conf.d/neutron-dhcp-agent
+    --log-file=/var/log/neutron/dhcp-agent.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: neutron:neutron
+    path: /var/log/neutron
+    recurse: true
+  - owner: neutron:neutron
+    path: /var/lib/neutron
+    recurse: true
+/var/lib/kolla/config_files/neutron_l3_agent.json:
+  command: /usr/bin/neutron-l3-agent --config-file /usr/share/neutron/neutron-dist.conf
+    --config-dir /usr/share/neutron/l3_agent --config-file /etc/neutron/neutron.conf
+    --config-file /etc/neutron/l3_agent.ini --config-dir /etc/neutron/conf.d/common
+    --config-dir /etc/neutron/conf.d/neutron-l3-agent --log-file=/var/log/neutron/l3-agent.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: neutron:neutron
+    path: /var/log/neutron
+    recurse: true
+  - owner: neutron:neutron
+    path: /var/lib/neutron
+    recurse: true
+/var/lib/kolla/config_files/neutron_metadata_agent.json:
+  command: /usr/bin/neutron-metadata-agent --config-file /usr/share/neutron/neutron-dist.conf
+    --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/metadata_agent.ini
+    --config-dir /etc/neutron/conf.d/common --config-dir /etc/neutron/conf.d/neutron-metadata-agent
+    --log-file=/var/log/neutron/metadata-agent.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: neutron:neutron
+    path: /var/log/neutron
+    recurse: true
+  - owner: neutron:neutron
+    path: /var/lib/neutron
+    recurse: true
+/var/lib/kolla/config_files/neutron_ovs_agent.json:
+  command: /usr/bin/neutron-openvswitch-agent --config-file /usr/share/neutron/neutron-dist.conf
+    --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/openvswitch_agent.ini
+    --config-file /etc/neutron/plugins/ml2/ml2_conf.ini --config-dir /etc/neutron/conf.d/common
+    --log-file=/var/log/neutron/openvswitch-agent.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: neutron:neutron
+    path: /var/log/neutron
+    recurse: true
+/var/lib/kolla/config_files/neutron_server_tls_proxy.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/nova_api.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+/var/lib/kolla/config_files/nova_api_cron.json:
+  command: /usr/sbin/crond -n
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+/var/lib/kolla/config_files/nova_conductor.json:
+  command: '/usr/bin/nova-conductor '
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+/var/lib/kolla/config_files/nova_consoleauth.json:
+  command: '/usr/bin/nova-consoleauth '
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+/var/lib/kolla/config_files/nova_metadata.json:
+  command: '/usr/bin/nova-api-metadata '
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+/var/lib/kolla/config_files/nova_placement.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+/var/lib/kolla/config_files/nova_scheduler.json:
+  command: '/usr/bin/nova-scheduler '
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+/var/lib/kolla/config_files/nova_vnc_proxy.json:
+  command: '/usr/bin/nova-novncproxy --web /usr/share/novnc/ '
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+/var/lib/kolla/config_files/panko_api.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: panko:panko
+    path: /var/log/panko
+    recurse: true
+/var/lib/kolla/config_files/rabbitmq.json:
+  command: /usr/sbin/pacemaker_remoted
+  config_files:
+  - dest: /etc/libqb/force-filesystem-sockets
+    owner: root
+    perm: '0644'
+    source: /dev/null
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /
+    merge: true
+    optional: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-tls/*
+  permissions:
+  - owner: rabbitmq:rabbitmq
+    path: /var/lib/rabbitmq
+    recurse: true
+  - owner: rabbitmq:rabbitmq
+    path: /var/log/rabbitmq
+    recurse: true
+  - optional: true
+    owner: rabbitmq:rabbitmq
+    path: /etc/pki/tls/certs/rabbitmq.crt
+    perm: '0600'
+  - optional: true
+    owner: rabbitmq:rabbitmq
+    path: /etc/pki/tls/private/rabbitmq.key
+    perm: '0600'
+/var/lib/kolla/config_files/redis.json:
+  command: /usr/sbin/pacemaker_remoted
+  config_files:
+  - dest: /etc/libqb/force-filesystem-sockets
+    owner: root
+    perm: '0644'
+    source: /dev/null
+  - dest: /
+    merge: true
+    optional: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /
+    merge: true
+    optional: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-tls/*
+  permissions:
+  - owner: redis:redis
+    path: /var/run/redis
+    recurse: true
+  - owner: redis:redis
+    path: /var/lib/redis
+    recurse: true
+  - owner: redis:redis
+    path: /var/log/redis
+    recurse: true
+  - optional: true
+    owner: redis:redis
+    path: /etc/pki/tls/certs/redis.crt
+    perm: '0600'
+  - optional: true
+    owner: redis:redis
+    path: /etc/pki/tls/private/redis.key
+    perm: '0600'
+/var/lib/kolla/config_files/redis_tls_proxy.json:
+  command: stunnel /etc/stunnel/stunnel.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_account_auditor.json:
+  command: /usr/bin/swift-account-auditor /etc/swift/account-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_account_reaper.json:
+  command: /usr/bin/swift-account-reaper /etc/swift/account-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_account_replicator.json:
+  command: /usr/bin/swift-account-replicator /etc/swift/account-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_account_server.json:
+  command: /usr/bin/swift-account-server /etc/swift/account-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_container_auditor.json:
+  command: /usr/bin/swift-container-auditor /etc/swift/container-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_container_replicator.json:
+  command: /usr/bin/swift-container-replicator /etc/swift/container-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_container_server.json:
+  command: /usr/bin/swift-container-server /etc/swift/container-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_container_updater.json:
+  command: /usr/bin/swift-container-updater /etc/swift/container-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_object_auditor.json:
+  command: /usr/bin/swift-object-auditor /etc/swift/object-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_object_expirer.json:
+  command: /usr/bin/swift-object-expirer /etc/swift/object-expirer.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_object_replicator.json:
+  command: /usr/bin/swift-object-replicator /etc/swift/object-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_object_server.json:
+  command: /usr/bin/swift-object-server /etc/swift/object-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: swift:swift
+    path: /var/cache/swift
+    recurse: true
+/var/lib/kolla/config_files/swift_object_updater.json:
+  command: /usr/bin/swift-object-updater /etc/swift/object-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_proxy.json:
+  command: /usr/bin/swift-proxy-server /etc/swift/proxy-server.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_proxy_tls_proxy.json:
+  command: /usr/sbin/httpd -DFOREGROUND
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/swift_rsync.json:
+  command: /usr/bin/rsync --daemon --no-detach --config=/etc/rsyncd.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*

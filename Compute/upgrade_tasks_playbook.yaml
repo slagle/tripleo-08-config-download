@@ -1,0 +1,244 @@
+- hosts: Compute
+  name: Compute playbook
+  tasks:
+  - command: systemctl is-enabled --quiet openstack-ceilometer-compute
+    ignore_errors: true
+    name: Check if openstack-ceilometer-compute is deployed
+    register: openstack_ceilometer_compute_enabled
+    tags: common
+  - command: systemctl is-enabled --quiet openstack-ceilometer-polling
+    ignore_errors: true
+    name: Check if openstack-ceilometer-polling is deployed
+    register: openstack_ceilometer_polling_enabled
+    tags: common
+  - command: systemctl is-enabled --quiet neutron-openvswitch-agent
+    ignore_errors: true
+    name: Check if neutron_ovs_agent is deployed
+    register: neutron_ovs_agent_enabled
+    tags: common
+  - command: systemctl is-enabled --quiet iscsid
+    ignore_errors: true
+    name: Check if iscsid service is deployed
+    register: iscsid_enabled
+    tags: common
+  - command: systemctl is-enabled --quiet iscsid.socket
+    ignore_errors: true
+    name: Check if iscsid.socket service is deployed
+    register: iscsid_socket_enabled
+    tags: common
+  - command: systemctl is-enabled --quiet openstack-nova-compute
+    ignore_errors: true
+    name: Check if nova_compute is deployed
+    register: nova_compute_enabled
+    tags: common
+  - command: systemctl is-enabled --quiet libvirtd
+    ignore_errors: true
+    name: Check if nova_libvirt is deployed
+    register: nova_libvirt_enabled
+    tags: common
+  - command: systemctl is-active --quiet openstack-ceilometer-compute
+    name: 'PreUpgrade step0,validation: Check service openstack-ceilometer-compute
+      is running'
+    tags: validation
+    when:
+    - step|int == 0
+    - openstack_ceilometer_compute_enabled.rc == 0
+  - command: systemctl is-active --quiet openstack-ceilometer-polling
+    name: 'PreUpgrade step0,validation: Check service openstack-ceilometer-polling
+      is running'
+    tags: validation
+    when:
+    - step|int == 0
+    - openstack_ceilometer_polling_enabled.rc == 0
+  - command: systemctl is-active --quiet neutron-openvswitch-agent
+    name: 'PreUpgrade step0,validation: Check service neutron-openvswitch-agent is
+      running'
+    tags: validation
+    when:
+    - step|int == 0
+    - neutron_ovs_agent_enabled.rc == 0
+  - command: systemctl is-active --quiet iscsid
+    name: 'PreUpgrade step0,validation: Check if iscsid is running'
+    tags: validation
+    when:
+    - step|int == 0
+    - iscsid_enabled.rc == 0
+  - command: systemctl is-active --quiet iscsid.socket
+    name: 'PreUpgrade step0,validation: Check if iscsid.socket is running'
+    tags: validation
+    when:
+    - step|int == 0
+    - iscsid_socket_enabled.rc == 0
+  - command: systemctl is-active --quiet openstack-nova-compute
+    name: 'PreUpgrade step0,validation: Check service openstack-nova-compute is running'
+    tags: validation
+    when:
+    - step|int == 0
+    - nova_compute_enabled.rc == 0
+  - command: systemctl is-active --quiet libvirtd
+    name: 'PreUpgrade step0,validation: Check service libvirtd is running'
+    tags: validation
+    when:
+    - step|int == 0
+    - nova_libvirt_enabled.rc == 0
+  - name: Check yum for rpm-python present
+    register: rpm_python_check
+    when: step|int == 0
+    yum: name=rpm-python state=present
+  - fail: msg="rpm-python package was not present before this run! Check environment
+      before re-running"
+    name: Fail when rpm-python wasn't present
+    when:
+    - step|int == 0
+    - rpm_python_check.changed != false
+  - ini_file: dest=/etc/nova/nova.conf section=upgrade_levels option=compute value=
+    name: Set compute upgrade level to auto
+    when: step|int == 1
+  - name: Stop snmp service
+    service: name=snmpd state=stopped
+    when: step|int == 1
+  - name: Stop and disable ceilometer compute agent
+    service: name=openstack-ceilometer-compute state=stopped enabled=no
+    when:
+    - step|int == 2
+    - openstack_ceilometer_compute_enabled.rc|default('') == 0
+  - name: Stop and disable ceilometer polling agent
+    service: name=openstack-ceilometer-polling state=stopped enabled=no
+    when:
+    - step|int == 2
+    - openstack_ceilometer_polling_enabled.rc|default('') == 0
+  - name: Set fact for removal of openstack-ceilometer-compute and polling package
+    set_fact:
+      remove_ceilometer_compute_polling_package: false
+    when: step|int == 2
+  - ignore_errors: true
+    name: Remove openstack-ceilometer-compute package if operator requests it
+    when:
+    - step|int == 2
+    - remove_ceilometer_compute_polling_package|bool
+    yum: name=openstack-ceilometer-compute state=removed
+  - ignore_errors: true
+    name: Remove openstack-ceilometer-polling package if operator requests it
+    when:
+    - step|int == 2
+    - remove_ceilometer_compute_polling_package|bool
+    yum: name=openstack-ceilometer-polling state=removed
+  - ignore_errors: true
+    name: Check openvswitch version.
+    register: ovs_version
+    shell: rpm -qa | awk -F- '/^openvswitch-2/{print $2 "-" $3}'
+    when: step|int == 2
+  - ignore_errors: true
+    name: Check openvswitch packaging.
+    register: ovs_packaging_issue
+    shell: rpm -q --scripts openvswitch | awk '/postuninstall/,/*/' | grep -q "systemctl.*try-restart"
+    when: step|int == 2
+  - block:
+    - file:
+        path: /root/OVS_UPGRADE
+        state: absent
+      name: 'Ensure empty directory: emptying.'
+    - file:
+        group: root
+        mode: 488
+        owner: root
+        path: /root/OVS_UPGRADE
+        state: directory
+      name: 'Ensure empty directory: creating.'
+    - command: yum makecache
+      name: Make yum cache.
+    - command: yumdownloader --destdir /root/OVS_UPGRADE --resolve openvswitch
+      name: Download OVS packages.
+    - name: Get rpm list for manual upgrade of OVS.
+      register: ovs_list_of_rpms
+      shell: ls -1 /root/OVS_UPGRADE/*.rpm
+    - args:
+        chdir: /root/OVS_UPGRADE
+      name: Manual upgrade of OVS
+      shell: 'rpm -U --test {{item}} 2>&1 | grep "already installed" || \
+
+        rpm -U --replacepkgs --notriggerun --nopostun {{item}};
+
+        '
+      with_items:
+      - '{{ovs_list_of_rpms.stdout_lines}}'
+    when:
+    - step|int == 2
+    - '''2.5.0-14'' in ovs_version.stdout|default('''') or ovs_packaging_issue|default(false)|succeeded'
+  - name: Stop and disable neutron_ovs_agent service
+    service: name=neutron-openvswitch-agent state=stopped enabled=no
+    when:
+    - step|int == 2
+    - neutron_ovs_agent_enabled.rc == 0
+  - name: Set fact for removal of openstack-neutron-openvswitch package
+    set_fact:
+      remove_neutron_openvswitch_package: false
+    when: step|int == 2
+  - ignore_errors: true
+    name: Remove openstack-neutron-openvswitch package if operator requests it
+    when:
+    - step|int == 2
+    - remove_neutron_openvswitch_package|bool
+    yum: name=openstack-neutron-openvswitch state=removed
+  - name: Stop and disable iscsid service
+    service: name=iscsid state=stopped enabled=no
+    when:
+    - step|int == 2
+    - iscsid_enabled.rc == 0
+  - name: Stop and disable iscsid.socket service
+    service: name=iscsid.socket state=stopped enabled=no
+    when:
+    - step|int == 2
+    - iscsid_socket_enabled.rc == 0
+  - name: Stop and disable nova-compute service
+    service: name=openstack-nova-compute state=stopped enabled=no
+    when:
+    - step|int == 2
+    - nova_compute_enabled.rc == 0
+  - name: Set fact for removal of openstack-nova-compute package
+    set_fact:
+      remove_nova_compute_package: false
+    when: step|int == 2
+  - ignore_errors: true
+    name: Remove openstack-nova-compute package if operator requests it
+    when:
+    - step|int == 2
+    - remove_nova_compute_package|bool
+    yum: name=openstack-nova-compute state=removed
+  - name: Stop and disable libvirtd service
+    service: name=libvirtd state=stopped enabled=no
+    when:
+    - step|int == 2
+    - nova_libvirt_enabled.rc == 0
+  - name: Install docker packages on upgrade if missing
+    when: step|int == 3
+    yum: name=docker state=latest
+  - args:
+      creates: /etc/sysconfig/ip6tables.n-o-upgrade
+    name: blank ipv6 rule before activating ipv6 firewall.
+    shell: cat /etc/sysconfig/ip6tables > /etc/sysconfig/ip6tables.n-o-upgrade; cat</dev/null>/etc/sysconfig/ip6tables
+    when: step|int == 3
+  - name: Check for os-net-config upgrade
+    register: os_net_config_need_upgrade
+    shell: yum check-upgrade | awk '/os-net-config/{print}'
+    when: step|int == 3
+  - ignore_errors: true
+    name: Check that os-net-config has configuration
+    register: os_net_config_has_config
+    shell: test -s /etc/os-net-config/config.json
+    when: step|int == 3
+  - block:
+    - name: Upgrade os-net-config
+      yum: name=os-net-config state=latest
+    - changed_when: os_net_config_upgrade.rc == 2
+      command: os-net-config --no-activate -c /etc/os-net-config/config.json -v --detailed-exit-codes
+      failed_when: os_net_config_upgrade.rc not in [0,2]
+      name: take new os-net-config parameters into account now
+      register: os_net_config_upgrade
+    when:
+    - step|int == 3
+    - os_net_config_need_upgrade.stdout
+    - os_net_config_has_config.rc == 0
+  - name: Update all packages
+    when: step|int == 3
+    yum: name=* state=latest

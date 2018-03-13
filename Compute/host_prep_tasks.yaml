@@ -1,0 +1,100 @@
+- file:
+    path: /var/log/containers/ceilometer
+    state: directory
+  name: create persistent logs directory
+- copy:
+    content: 'Log files from ceilometer containers can be found under
+
+      /var/log/containers/ceilometer.
+
+      '
+    dest: /var/log/ceilometer/readme.txt
+  ignore_errors: true
+  name: ceilometer logs readme
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/neutron
+- copy:
+    content: 'Log files from neutron containers can be found under
+
+      /var/log/containers/neutron and /var/log/containers/httpd/neutron-api.
+
+      '
+    dest: /var/log/neutron/readme.txt
+  ignore_errors: true
+  name: neutron logs readme
+- name: stat /lib/systemd/system/iscsid.socket
+  register: stat_iscsid_socket
+  stat: path=/lib/systemd/system/iscsid.socket
+- name: Stop and disable iscsid.socket service
+  service: name=iscsid.socket state=stopped enabled=no
+  when: stat_iscsid_socket.stat.exists
+- file:
+    path: /var/log/containers/nova
+    state: directory
+  name: create persistent logs directory
+- copy:
+    content: 'Log files from nova containers can be found under
+
+      /var/log/containers/nova and /var/log/containers/httpd/nova-*.
+
+      '
+    dest: /var/log/nova/readme.txt
+  ignore_errors: true
+  name: nova logs readme
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - /var/lib/nova
+  - /var/lib/libvirt
+- file:
+    path: /etc/ceph
+    state: directory
+  name: ensure ceph configurations exist
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create libvirt persistent data directories
+  with_items:
+  - /etc/libvirt
+  - /etc/libvirt/secrets
+  - /etc/libvirt/qemu
+  - /var/lib/libvirt
+  - /var/log/containers/libvirt
+- group:
+    gid: 107
+    name: qemu
+    state: present
+  name: ensure qemu group is present on the host
+- name: ensure qemu user is present on the host
+  user:
+    comment: qemu user
+    group: qemu
+    name: qemu
+    shell: /sbin/nologin
+    state: present
+    uid: 107
+- file:
+    group: qemu
+    owner: qemu
+    path: /var/lib/vhost_sockets
+    state: directory
+  name: create directory for vhost-user sockets with qemu ownership
+- command: /usr/bin/rpm -q libvirt-daemon
+  failed_when: false
+  name: check if libvirt is installed
+  register: libvirt_installed
+- name: make sure libvirt services are disabled
+  service:
+    enabled: false
+    name: '{{ item }}'
+    state: stopped
+  when: libvirt_installed.rc == 0
+  with_items:
+  - libvirtd.service
+  - virtlogd.socket

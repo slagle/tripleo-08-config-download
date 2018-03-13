@@ -1,0 +1,4 @@
+- include: Controller/upgrade_tasks.yaml
+  when: role_name == 'Controller'
+- include: Compute/upgrade_tasks.yaml
+  when: role_name == 'Compute'

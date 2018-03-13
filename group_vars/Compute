@@ -1,0 +1,14 @@
+Compute_pre_deployments:
+  - NetworkDeployment
+  - UpdateDeployment
+  - NovaComputeUpgradeInitDeployment
+  - NovaComputeDeployment
+  - SshHostPubKeyDeployment
+  - ComputeHostsDeployment
+  - ComputeSshKnownHostsDeployment
+  - ComputeAllNodesDeployment
+  - ComputeAllNodesValidationDeployment
+  - ComputeHostPrepDeployment
+  - ComputeArtifactsDeploy
+
+Compute_post_deployments:  [] 

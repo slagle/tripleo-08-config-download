@@ -1,0 +1,4 @@
+- include_tasks: Controller/fast_forward_upgrade_tasks.yaml
+  when: role_name == 'Controller' and ansible_hostname == Controller[0]
+- include_tasks: Compute/fast_forward_upgrade_tasks.yaml
+  when: role_name == 'Compute' and ansible_hostname == Compute[0]

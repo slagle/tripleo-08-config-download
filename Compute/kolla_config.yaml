@@ -1,0 +1,93 @@
+/var/lib/kolla/config_files/ceilometer_agent_compute.json:
+  command: /usr/bin/ceilometer-polling --polling-namespaces compute --logfile /var/log/ceilometer/compute.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/iscsid.json:
+  command: /usr/sbin/iscsid -f
+  config_files:
+  - dest: /etc/iscsi/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-iscsid/*
+/var/lib/kolla/config_files/logrotate-crond.json:
+  command: /usr/sbin/crond -s -n
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/neutron_ovs_agent.json:
+  command: /usr/bin/neutron-openvswitch-agent --config-file /usr/share/neutron/neutron-dist.conf
+    --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/openvswitch_agent.ini
+    --config-file /etc/neutron/plugins/ml2/ml2_conf.ini --config-dir /etc/neutron/conf.d/common
+    --log-file=/var/log/neutron/openvswitch-agent.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: neutron:neutron
+    path: /var/log/neutron
+    recurse: true
+/var/lib/kolla/config_files/nova-migration-target.json:
+  command: /usr/sbin/sshd -D -p 2022
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ssh/
+    owner: root
+    perm: '0600'
+    source: /host-ssh/ssh_host_*_key
+/var/lib/kolla/config_files/nova_compute.json:
+  command: '/usr/bin/nova-compute '
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/iscsi/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-iscsid/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+  - owner: nova:nova
+    path: /var/lib/nova
+    recurse: true
+  - owner: nova:nova
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/nova_libvirt.json:
+  command: /usr/sbin/libvirtd
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: nova:nova
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/nova_virtlogd.json:
+  command: /usr/sbin/virtlogd --config /etc/libvirt/virtlogd.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*

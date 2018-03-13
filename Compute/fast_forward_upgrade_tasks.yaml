@@ -1,0 +1,85 @@
+- command: systemctl is-enabled openstack-ceilometer-compute
+  ignore_errors: true
+  name: FFU check if openstack-ceilometer-compute is deployed
+  register: ceilometer_agent_compute_enabled_result
+  when:
+  - step|int == 0
+  - release == 'ocata'
+- name: Set fact ceilometer_agent_compute_enabled
+  set_fact:
+    ceilometer_agent_compute_enabled: '{{ ceilometer_agent_compute_enabled_result.rc
+      == 0 }}'
+  when:
+  - step|int == 0
+  - release == 'ocata'
+- command: systemctl is-enabled --quiet neutron-openvswitch-agent
+  ignore_errors: true
+  name: Check if neutron_ovs_agent is deployed
+  register: neutron_ovs_agent_enabled_result
+  when:
+  - step|int == 0
+  - release == 'ocata'
+- name: Set fact neutron_ovs_agent_enabled
+  set_fact:
+    neutron_ovs_agent_enabled: '{{ neutron_ovs_agent_enabled_result.rc == 0 }}'
+  when:
+  - step|int == 0
+  - release == 'ocata'
+- command: systemctl is-enabled --quiet openstack-nova-compute
+  ignore_errors: true
+  name: Check if nova-compute is deployed
+  register: nova_compute_enabled_result
+  when:
+  - step|int == 0
+  - release == 'ocata'
+- name: Set fact nova_compute_enabled
+  set_fact:
+    nova_compute_enabled: '{{ nova_compute_enabled_result.rc == 0 }}'
+  when:
+  - step|int == 0
+  - release == 'ocata'
+- name: FFU stop and disable openstack-ceilometer-compute service
+  service: name=openstack-ceilometer-compute state=stopped enabled=no
+  when:
+  - step|int == 1
+  - release == 'ocata'
+  - ceilometer_agent_compute_enabled|bool
+- name: Stop neutron_openvswitch_agent
+  service: name=neutron-openvswitch-agent state=stopped enabled=no
+  when:
+  - step|int == 1
+  - release == 'ocata'
+  - neutron_ovs_agent_enabled|bool
+- name: Stop and disable nova-compute service
+  service: name=openstack-nova-compute state=stopped
+  when:
+  - step|int == 1
+  - nova_compute_enabled|bool
+  - release == 'ocata'
+- name: Register repo type and args
+  set_fact:
+    fast_forward_repo_args:
+      tripleo_repos:
+        ocata: -b ocata current
+        pike: -b pike current
+    fast_forward_repo_type: tripleo-repos
+  when: step|int == 3
+- debug:
+    msg: 'fast_forward_repo_type: {{ fast_forward_repo_type }} fast_forward_repo_args:
+      {{ fast_forward_repo_args }}'
+  when: step|int == 3
+- block:
+  - git:
+      dest: /home/stack/tripleo-repos/
+      repo: https://github.com/openstack/tripleo-repos.git
+    name: clone tripleo-repos
+  - args:
+      chdir: /home/stack/tripleo-repos/
+    command: python setup.py install
+    name: install tripleo-repos
+  - command: tripleo-repos {{ fast_forward_repo_args.tripleo_repos[release] }}
+    name: Enable tripleo-repos
+  when:
+  - step|int == 3
+  - is_bootstrap_node|bool
+  - fast_forward_repo_type == 'tripleo-repos'

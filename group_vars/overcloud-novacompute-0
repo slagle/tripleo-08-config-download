@@ -1,0 +1,2813 @@
+deploy_server_id: e61299b9-fc40-41cf-a59d-da8e397c76dc
+
+NetworkDeployment:
+  config: |
+    {}
+  creation_time: "2018-03-09T19:45:29Z"
+  deployment_name: NetworkDeployment
+  group: apply-config
+  id: 476ca7fb-fbe5-42a6-96d0-ed79a689c284
+  inputs:
+    - name: interface_name
+      description: None
+      type: String
+      value: |-
+        nic1
+    - name: bridge_name
+      description: None
+      type: String
+      value: |-
+        br-ex
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-Compute-gns5j7srqhbw-0-nkubhw637az4-NetworkDeployment-ws3d3nkrlyjn-TripleOSoftwareDeployment-27ivylwbpcau/3127d775-0df6-43c3-a2ca-cb2c18aee50e
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+
+UpdateDeployment:
+  config: |
+    #!/bin/bash
+    
+    set -eu
+    
+    DEBUG="true" # set false if the verbosity is a problem
+    SCRIPT_NAME=$(basename $0)
+    function log_debug {
+      if [[ $DEBUG = "true" ]]; then
+        echo "`date` $SCRIPT_NAME tripleo-upgrade $(facter hostname) $1"
+      fi
+    }
+    
+    function is_bootstrap_node {
+      if [ "$(hiera -c /etc/puppet/hiera.yaml bootstrap_nodeid | tr '[:upper:]' '[:lower:]')" = "$(facter hostname | tr '[:upper:]' '[:lower:]')" ]; then
+        log_debug "Node is bootstrap"
+        echo "true"
+      fi
+    }
+    
+    function check_resource_pacemaker {
+      if [ "$#" -ne 3 ]; then
+        echo_error "ERROR: check_resource function expects 3 parameters, $# given"
+        exit 1
+      fi
+    
+      local service=$1
+      local state=$2
+      local timeout=$3
+    
+      if [[ -z $(is_bootstrap_node) ]] ; then
+        log_debug "Node isn't bootstrap, skipping check for $service to be $state here "
+        return
+      else
+        log_debug "Node is bootstrap checking $service to be $state here"
+      fi
+    
+      if [ "$state" = "stopped" ]; then
+        match_for_incomplete='Started'
+      else # started
+        match_for_incomplete='Stopped'
+      fi
+    
+      nodes_local=$(pcs status  | grep ^Online | sed 's/.*\[ \(.*\) \]/\1/g' | sed 's/ /\|/g')
+      if timeout -k 10 $timeout crm_resource --wait; then
+        node_states=$(pcs status --full | grep "$service" | grep -v Clone | { egrep "$nodes_local" || true; } )
+        if echo "$node_states" | grep -q "$match_for_incomplete"; then
+          echo_error "ERROR: cluster finished transition but $service was not in $state state, exiting."
+          exit 1
+        else
+          echo "$service has $state"
+        fi
+      else
+        echo_error "ERROR: cluster remained unstable for more than $timeout seconds, exiting."
+        exit 1
+      fi
+    
+    }
+    
+    function pcmk_running {
+      if [[ $(systemctl is-active pacemaker) = "active" ]] ; then
+        echo "true"
+      fi
+    }
+    
+    function is_systemd_unknown {
+      local service=$1
+      if [[ $(systemctl is-active "$service") = "unknown" ]]; then
+        log_debug "$service found to be unkown to systemd"
+        echo "true"
+      fi
+    }
+    
+    function grep_is_cluster_controlled {
+      local service=$1
+      if [[ -n $(systemctl status $service -l | grep Drop-In -A 5 | grep pacemaker) ||
+          -n $(systemctl status $service -l | grep "Cluster Controlled $service") ]] ; then
+        log_debug "$service is pcmk managed from systemctl grep"
+        echo "true"
+      fi
+    }
+    
+    
+    function is_systemd_managed {
+      local service=$1
+      #if we have pcmk check to see if it is managed there
+      if [[ -n $(pcmk_running) ]]; then
+        if [[ -z $(pcs status --full | grep $service)  && -z $(is_systemd_unknown $service) ]] ; then
+          log_debug "$service found to be systemd managed from pcs status"
+          echo "true"
+        fi
+      else
+        # if it is "unknown" to systemd, then it is pacemaker managed
+        if [[  -n $(is_systemd_unknown $service) ]] ; then
+          return
+        elif [[ -z $(grep_is_cluster_controlled $service) ]] ; then
+          echo "true"
+        fi
+      fi
+    }
+    
+    function is_pacemaker_managed {
+      local service=$1
+      #if we have pcmk check to see if it is managed there
+      if [[ -n $(pcmk_running) ]]; then
+        if [[ -n $(pcs status --full | grep $service) ]]; then
+          log_debug "$service found to be pcmk managed from pcs status"
+          echo "true"
+        fi
+      else
+        # if it is unknown to systemd, then it is pcmk managed
+        if [[ -n $(is_systemd_unknown $service) ]]; then
+          echo "true"
+        elif [[ -n $(grep_is_cluster_controlled $service) ]] ; then
+          echo "true"
+        fi
+      fi
+    }
+    
+    function is_managed {
+      local service=$1
+      if [[ -n $(is_pacemaker_managed $service) || -n $(is_systemd_managed $service) ]]; then
+        echo "true"
+      fi
+    }
+    
+    function check_resource_systemd {
+    
+      if [ "$#" -ne 3 ]; then
+        echo_error "ERROR: check_resource function expects 3 parameters, $# given"
+        exit 1
+      fi
+    
+      local service=$1
+      local state=$2
+      local timeout=$3
+      local check_interval=3
+    
+      if [ "$state" = "stopped" ]; then
+        match_for_incomplete='active'
+      else # started
+        match_for_incomplete='inactive'
+      fi
+    
+      log_debug "Going to check_resource_systemd for $service to be $state"
+    
+      #sanity check is systemd managed:
+      if [[ -z $(is_systemd_managed $service) ]]; then
+        echo "ERROR - $service not found to be systemd managed."
+        exit 1
+      fi
+    
+      tstart=$(date +%s)
+      tend=$(( $tstart + $timeout ))
+      while (( $(date +%s) < $tend )); do
+        if [[ "$(systemctl is-active $service)" = $match_for_incomplete ]]; then
+          echo "$service not yet $state, sleeping $check_interval seconds."
+          sleep $check_interval
+        else
+          echo "$service is $state"
+          return
+        fi
+      done
+    
+      echo "Timed out waiting for $service to go to $state after $timeout seconds"
+      exit 1
+    }
+    
+    
+    function check_resource {
+      local service=$1
+      local pcmk_managed=$(is_pacemaker_managed $service)
+      local systemd_managed=$(is_systemd_managed $service)
+    
+      if [[ -n $pcmk_managed && -n $systemd_managed ]] ; then
+        log_debug "ERROR $service managed by both systemd and pcmk - SKIPPING"
+        return
+      fi
+    
+      if [[ -n $pcmk_managed ]]; then
+        check_resource_pacemaker $@
+        return
+      elif [[ -n $systemd_managed ]]; then
+        check_resource_systemd $@
+        return
+      fi
+      log_debug "ERROR cannot check_resource for $service, not managed here?"
+    }
+    
+    function manage_systemd_service {
+      local action=$1
+      local service=$2
+      log_debug "Going to systemctl $action $service"
+      systemctl $action $service
+    }
+    
+    function manage_pacemaker_service {
+      local action=$1
+      local service=$2
+      # not if pacemaker isn't running!
+      if [[ -z $(pcmk_running) ]]; then
+        echo "$(facter hostname) pacemaker not active, skipping $action $service here"
+      elif [[ -n $(is_bootstrap_node) ]]; then
+        log_debug "Going to pcs resource $action $service"
+        pcs resource $action $service
+      fi
+    }
+    
+    function stop_or_disable_service {
+      local service=$1
+      local pcmk_managed=$(is_pacemaker_managed $service)
+      local systemd_managed=$(is_systemd_managed $service)
+    
+      if [[ -n $pcmk_managed && -n $systemd_managed ]] ; then
+        log_debug "Skipping stop_or_disable $service due to management conflict"
+        return
+      fi
+    
+      log_debug "Stopping or disabling $service"
+      if [[ -n $pcmk_managed ]]; then
+        manage_pacemaker_service disable $service
+        return
+      elif [[ -n $systemd_managed ]]; then
+        manage_systemd_service stop $service
+        return
+      fi
+      log_debug "ERROR: $service not managed here?"
+    }
+    
+    function start_or_enable_service {
+      local service=$1
+      local pcmk_managed=$(is_pacemaker_managed $service)
+      local systemd_managed=$(is_systemd_managed $service)
+    
+      if [[ -n $pcmk_managed && -n $systemd_managed ]] ; then
+        log_debug "Skipping start_or_enable $service due to management conflict"
+        return
+      fi
+    
+      log_debug "Starting or enabling $service"
+      if [[ -n $pcmk_managed ]]; then
+        manage_pacemaker_service enable $service
+        return
+      elif [[ -n $systemd_managed ]]; then
+        manage_systemd_service start $service
+        return
+      fi
+      log_debug "ERROR $service not managed here?"
+    }
+    
+    function restart_service {
+      local service=$1
+      local pcmk_managed=$(is_pacemaker_managed $service)
+      local systemd_managed=$(is_systemd_managed $service)
+    
+      if [[ -n $pcmk_managed && -n $systemd_managed ]] ; then
+        log_debug "ERROR $service managed by both systemd and pcmk - SKIPPING"
+        return
+      fi
+    
+      log_debug "Restarting $service"
+      if [[ -n $pcmk_managed ]]; then
+        manage_pacemaker_service restart $service
+        return
+      elif [[ -n $systemd_managed ]]; then
+        manage_systemd_service restart $service
+        return
+      fi
+      log_debug "ERROR $service not managed here?"
+    }
+    
+    function echo_error {
+        echo "$@" | tee /dev/fd2
+    }
+    
+    # swift is a special case because it is/was never handled by pacemaker
+    # when stand-alone swift is used, only swift-proxy is running on controllers
+    function systemctl_swift {
+        services=( openstack-swift-account-auditor openstack-swift-account-reaper openstack-swift-account-replicator openstack-swift-account \
+                   openstack-swift-container-auditor openstack-swift-container-replicator openstack-swift-container-updater openstack-swift-container \
+                   openstack-swift-object-auditor openstack-swift-object-replicator openstack-swift-object-updater openstack-swift-object openstack-swift-proxy )
+        local action=$1
+        case $action in
+            stop)
+                services=$(systemctl | grep openstack-swift- | grep running | awk '{print $1}')
+                ;;
+            start)
+                enable_swift_storage=$(hiera -c /etc/puppet/hiera.yaml tripleo::profile::base::swift::storage::enable_swift_storage)
+                if [[ $enable_swift_storage != "true" ]]; then
+                    services=( openstack-swift-proxy )
+                fi
+                ;;
+            *)  echo "Unknown action $action passed to systemctl_swift"
+                exit 1
+                ;; # shouldn't ever happen...
+        esac
+        for service in ${services[@]}; do
+            manage_systemd_service $action $service
+        done
+    }
+    
+    # Special-case OVS for https://bugs.launchpad.net/tripleo/+bug/1635205
+    # Update condition and add --notriggerun for +bug/1669714
+    function special_case_ovs_upgrade_if_needed {
+        if rpm -qa | grep "^openvswitch-2.5.0-14" || rpm -q --scripts openvswitch | awk '/postuninstall/,/*/' | grep "systemctl.*try-restart" ; then
+            echo "Manual upgrade of openvswitch - ovs-2.5.0-14 or restart in postun detected"
+            rm -rf OVS_UPGRADE
+            mkdir OVS_UPGRADE && pushd OVS_UPGRADE
+            echo "Attempting to downloading latest openvswitch with yumdownloader"
+            yumdownloader --resolve openvswitch
+            for pkg in $(ls -1 *.rpm);  do
+                if rpm -U --test $pkg 2>&1 | grep "already installed" ; then
+                    echo "Looks like newer version of $pkg is already installed, skipping"
+                else
+                    echo "Updating $pkg with --nopostun --notriggerun"
+                    rpm -U --replacepkgs --nopostun --notriggerun $pkg
+                fi
+            done
+            popd
+        else
+            echo "Skipping manual upgrade of openvswitch - no restart in postun detected"
+        fi
+    
+    }
+    
+    # This code is meant to fix https://bugs.launchpad.net/tripleo/+bug/1686357 on
+    # existing setups via a minor update workflow and be idempotent. We need to
+    # run this before the yum update because we fix this up even when there are no
+    # packages to update on the system (in which case the script exits).
+    # This code must be called with set +eu (due to the ocf scripts being sourced)
+    function fixup_wrong_ipv6_vip {
+        # This XPath query identifies of all the VIPs in pacemaker with netmask /64. Those are IPv6 only resources that have the wrong netmask
+        # This gives the address of the resource in the CIB, one address per line. For example:
+        # /cib/configuration/resources/primitive[@id='ip-2001.db8.ca2.4..10']/instance_attributes[@id='ip-2001.db8.ca2.4..10-instance_attributes']\
+        # /nvpair[@id='ip-2001.db8.ca2.4..10-instance_attributes-cidr_netmask']
+        vip_xpath_query="//resources/primitive[@type='IPaddr2']/instance_attributes/nvpair[@name='cidr_netmask' and @value='64']"
+        vip_xpath_xml_addresses=$(cibadmin --query --xpath "$vip_xpath_query" -e 2>/dev/null)
+        # The following extracts the @id value of the resource
+        vip_resources_to_fix=$(echo -e "$vip_xpath_xml_addresses" | sed -n "s/.*primitive\[@id='\([^']*\)'.*/\1/p")
+        # Runnning this in a subshell so that sourcing files cannot possibly affect the running script
+        (
+            OCF_PATH="/usr/lib/ocf/lib/heartbeat"
+            if [ -n "$vip_resources_to_fix" -a -f $OCF_PATH/ocf-shellfuncs -a -f $OCF_PATH/findif.sh ]; then
+                source $OCF_PATH/ocf-shellfuncs
+                source $OCF_PATH/findif.sh
+                for resource in $vip_resources_to_fix; do
+                    echo "Updating IPv6 VIP $resource with a /128 and a correct addrlabel"
+                    # The following will give us something like:
+                    # <nvpair id="ip-2001.db8.ca2.4..10-instance_attributes-ip" name="ip" value="2001:db8:ca2:4::10"/>
+                    ip_cib_nvpair=$(cibadmin --query --xpath "//resources/primitive[@type='IPaddr2' and @id='$resource']/instance_attributes/nvpair[@name='ip']")
+                    # Let's filter out the value of the nvpair to get the ip address
+                    ip_address=$(echo $ip_cib_nvpair | xmllint --xpath 'string(//nvpair/@value)' -)
+                    OCF_RESKEY_cidr_netmask="64"
+                    OCF_RESKEY_ip="$ip_address"
+                    # Unfortunately due to https://bugzilla.redhat.com/show_bug.cgi?id=1445628
+                    # we need to find out the appropiate nic given the ip address.
+                    nic=$(findif $ip_address | awk '{ print $1 }')
+                    ret=$?
+                    if [ -z "$nic" -o $ret -ne 0 ]; then
+                        echo "NIC autodetection failed for VIP $ip_address, not updating VIPs"
+                        # Only exits the subshell
+                        exit 1
+                    fi
+                    ocf_run -info pcs resource update --wait "$resource" ip="$ip_address" cidr_netmask=128 nic="$nic" lvs_ipv6_addrlabel=true lvs_ipv6_addrlabel_value=99
+                    ret=$?
+                    if [ $ret -ne 0 ]; then
+                        echo "pcs resource update for VIP $resource failed, not updating VIPs"
+                        # Only exits the subshell
+                        exit 1
+                    fi
+                done
+            fi
+        )
+    }
+    
+    # https://bugs.launchpad.net/tripleo/+bug/1704131 guard against yum update
+    # waiting for an existing process until the heat stack time out
+    function check_for_yum_lock {
+        if [[ -f /var/run/yum.pid ]] ; then
+            ERR="ERROR existing yum.pid detected - can't continue! Please ensure
+    there is no other package update process for the duration of the minor update
+    worfklow. Exiting."
+            echo $ERR
+            exit 1
+       fi
+    }
+    
+    # This function tries to resolve an RPM dependency issue that can arise when
+    # updating ceph packages on nodes that do not run the ceph-osd service. These
+    # nodes do not require the ceph-osd package, and updates will fail if the
+    # ceph-osd package cannot be updated because it's not available in any enabled
+    # repo. The dependency issue is resolved by removing the ceph-osd package from
+    # nodes that don't require it.
+    #
+    # No change is made to nodes that use the ceph-osd service (e.g. ceph storage
+    # nodes, and hyperconverged nodes running ceph-osd and compute services). The
+    # ceph-osd package is left in place, and the currently enabled repos will be
+    # used to update all ceph packages.
+    function yum_pre_update {
+        echo "Checking for ceph-osd dependency issues"
+    
+        # No need to proceed if the ceph-osd package isn't installed
+        if ! rpm -q ceph-osd >/dev/null 2>&1; then
+            echo "ceph-osd package is not installed"
+            return
+        fi
+    
+        # Do not proceed if there's any sign that the ceph-osd package is in use:
+        # - Are there OSD entries in /var/lib/ceph/osd?
+        # - Are any ceph-osd processes running?
+        # - Are there any ceph data disks (as identified by 'ceph-disk')
+        if [ -n "$(ls -A /var/lib/ceph/osd 2>/dev/null)" ]; then
+            echo "ceph-osd package is required (there are OSD entries in /var/lib/ceph/osd)"
+            return
+        fi
+    
+        if [ "$(pgrep -xc ceph-osd)" != "0" ]; then
+            echo "ceph-osd package is required (there are ceph-osd processes running)"
+            return
+        fi
+    
+        if ceph-disk list |& grep -q "ceph data"; then
+            echo "ceph-osd package is required (ceph data disks detected)"
+            return
+        fi
+    
+        # Get a list of all ceph packages available from the currently enabled
+        # repos. Use "--showduplicates" to ensure the list includes installed
+        # packages that happen to be up to date.
+        local ceph_pkgs="$(yum list available --showduplicates 'ceph-*' |& awk '/^ceph/ {print $1}' | sort -u)"
+    
+        # No need to proceed if no ceph packages are available from the currently
+        # enabled repos.
+        if [ -z "$ceph_pkgs" ]; then
+            echo "ceph packages are not available from any enabled repo"
+            return
+        fi
+    
+        # No need to proceed if the ceph-osd package *is* available
+        if [[ $ceph_pkgs =~ ceph-osd ]]; then
+            echo "ceph-osd package is available from an enabled repo"
+            return
+        fi
+    
+        echo "ceph-osd package is not required, but is preventing updates to other ceph packages"
+        echo "Removing ceph-osd package to allow updates to other ceph packages"
+        yum -y remove ceph-osd
+    }
+    #!/bin/bash
+    
+    # A heat-config-script which runs yum update during a stack-update.
+    # Inputs:
+    #   deploy_action - yum will only be run if this is UPDATE
+    #   update_identifier - yum will only run for previously unused values of update_identifier
+    #   command - yum sub-command to run, defaults to "update"
+    #   command_arguments - yum command arguments, defaults to ""
+    
+    echo "Started yum_update.sh on server $deploy_server_id at `date`"
+    echo -n "false" > $heat_outputs_path.update_managed_packages
+    
+    if [ -f /.dockerenv ]; then
+        echo "Not running due to running inside a container"
+        exit 0
+    fi
+    
+    if [[ -z "$update_identifier" ]]; then
+        echo "Not running due to unset update_identifier"
+        exit 0
+    fi
+    
+    timestamp_dir=/var/lib/overcloud-yum-update
+    mkdir -p $timestamp_dir
+    
+    # sanitise to remove unusual characters
+    update_identifier=${update_identifier//[^a-zA-Z0-9-_]/}
+    
+    # seconds to wait for this node to rejoin the cluster after update
+    cluster_start_timeout=600
+    galera_sync_timeout=1800
+    cluster_settle_timeout=1800
+    
+    timestamp_file="$timestamp_dir/$update_identifier"
+    if [[ -a "$timestamp_file" ]]; then
+        echo "Not running for already-run timestamp \"$update_identifier\""
+        exit 0
+    fi
+    touch "$timestamp_file"
+    
+    pacemaker_status=""
+    # We include word boundaries in order to not match pacemaker_remote
+    if hiera -c /etc/puppet/hiera.yaml service_names | grep -q '\bpacemaker\b'; then
+        pacemaker_status=$(systemctl is-active pacemaker)
+    fi
+    
+    # (NB: when backporting this s/pacemaker_short_bootstrap_node_name/bootstrap_nodeid)
+    # This runs before the yum_update so we are guaranteed to run it even in the absence
+    # of packages to update (the check for -z "$update_identifier" guarantees that this
+    # is run only on overcloud stack update -i)
+    if [[ "$pacemaker_status" == "active" && \
+            "$(hiera -c /etc/puppet/hiera.yaml pacemaker_short_bootstrap_node_name | tr '[:upper:]' '[:lower:]')" == "$(facter hostname | tr '[:upper:]' '[:lower:]')" ]] ; then \
+        # OCF scripts don't cope with -eu
+        echo "Verifying if we need to fix up any IPv6 VIPs"
+        set +eu
+        fixup_wrong_ipv6_vip
+        ret=$?
+        set -eu
+        if [ $ret -ne 0 ]; then
+            echo "Fixing up IPv6 VIPs failed. Stopping here. (See https://bugs.launchpad.net/tripleo/+bug/1686357 for more info)"
+            exit 1
+        fi
+    fi
+    
+    command_arguments=${command_arguments:-}
+    
+    # Always ensure yum has full cache
+    check_for_yum_lock
+    yum makecache || echo "Yum makecache failed. This can cause failure later on."
+    
+    # yum check-update exits 100 if updates are available
+    check_for_yum_lock
+    set +e
+    check_update=$(yum check-update 2>&1)
+    check_update_exit=$?
+    set -e
+    
+    if [[ "$check_update_exit" == "1" ]]; then
+        echo "Failed to check for package updates"
+        echo "$check_update"
+        exit 1
+    elif [[ "$check_update_exit" != "100" ]]; then
+        echo "No packages require updating"
+        exit 0
+    fi
+    
+    # special case https://bugs.launchpad.net/tripleo/+bug/1635205 +bug/1669714
+    special_case_ovs_upgrade_if_needed
+    
+    # Resolve any RPM dependency issues before attempting the update
+    check_for_yum_lock
+    yum_pre_update
+    
+    if [[ "$pacemaker_status" == "active" ]] ; then
+        echo "Pacemaker running, stopping cluster node and doing full package update"
+        node_count=$(pcs status xml | grep -o "<nodes_configured.*/>" | grep -o 'number="[0-9]*"' | grep -o "[0-9]*")
+        if [[ "$node_count" == "1" ]] ; then
+            echo "Active node count is 1, stopping node with --force"
+            pcs cluster stop --force
+        else
+            pcs cluster stop
+        fi
+    else
+        echo "Upgrading Puppet modules and dependencies"
+        check_for_yum_lock
+        yum -q -y update puppet-tripleo
+        yum deplist puppet-tripleo | awk '/dependency/{print $2}' | xargs yum -q -y update
+        echo "Upgrading other packages is handled by config management tooling"
+        echo -n "true" > $heat_outputs_path.update_managed_packages
+        exit 0
+    fi
+    
+    command=${command:-update}
+    full_command="yum -q -y $command $command_arguments"
+    
+    echo "Running: $full_command"
+    check_for_yum_lock
+    result=$($full_command)
+    return_code=$?
+    echo "$result"
+    echo "yum return code: $return_code"
+    
+    if [[ "$pacemaker_status" == "active" ]] ; then
+        echo "Starting cluster node"
+        pcs cluster start
+    
+        hostname=$(hostname -s)
+        tstart=$(date +%s)
+        while [[ "$(pcs status | grep "^Online" | grep -F -o $hostname)" == "" ]]; do
+            sleep 5
+            tnow=$(date +%s)
+            if (( tnow-tstart > cluster_start_timeout )) ; then
+                echo "ERROR $hostname failed to join cluster in $cluster_start_timeout seconds"
+                pcs status
+                exit 1
+            fi
+        done
+    
+        RETVAL=$( pcs resource show galera-master | grep wsrep_cluster_address | grep -q `crm_node -n` ; echo $? )
+    
+        if [[ $RETVAL -eq 0 && -e /etc/sysconfig/clustercheck ]]; then
+            tstart=$(date +%s)
+            while ! clustercheck; do
+                sleep 5
+                tnow=$(date +%s)
+                if (( tnow-tstart > galera_sync_timeout )) ; then
+                    echo "ERROR galera sync timed out"
+                    exit 1
+                fi
+            done
+        fi
+    
+        echo "Waiting for pacemaker cluster to settle"
+        if ! timeout -k 10 $cluster_settle_timeout crm_resource --wait; then
+            echo "ERROR timed out while waiting for the cluster to settle"
+            exit 1
+        fi
+    
+        pcs status
+    fi
+    
+    
+    echo "Finished yum_update.sh on server $deploy_server_id at `date` with return code: $return_code"
+    
+    exit $return_code
+  creation_time: "2018-03-09T19:45:46Z"
+  deployment_name: UpdateDeployment
+  group: script
+  id: b3d2a7d9-9489-4669-bd64-d663d70c0a72
+  inputs:
+    - name: update_identifier
+      description: yum will only run for previously unused values of update_identifier
+      type: String
+      value: |-
+        
+    - name: command
+      description: yum sub-command to run, defaults to "update"
+      type: String
+      value: |-
+        update
+    - name: command_arguments
+      description: yum command arguments, defaults to ""
+      type: String
+      value: |-
+        
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-Compute-gns5j7srqhbw-0-nkubhw637az4-UpdateDeployment-muqw26nyo32q/95837c54-3711-459d-8af7-77f8835dd0de
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+    - name: update_managed_packages
+      description: boolean value indicating whether to upgrade managed packages
+      type: String
+
+NovaComputeUpgradeInitDeployment:
+  config: |
+    #!/bin/bash
+    
+    if [[ -f /etc/resolv.conf.save ]] ; then rm /etc/resolv.conf.save; fi
+    
+  creation_time: "2018-03-09T19:45:48Z"
+  deployment_name: NovaComputeUpgradeInitDeployment
+  group: script
+  id: 286f93fb-4319-469b-88ae-75622c9fcfd5
+  inputs:
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-Compute-gns5j7srqhbw-0-nkubhw637az4-NovaComputeUpgradeInitDeployment-qdrkoxttuqzj/dfccc324-448a-47bf-8417-10209eccda36
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+
+NovaComputeDeployment:
+  config:
+    {
+      "hierarchy": [
+        "\"%{::uuid}\"", 
+        "heat_config_%{::deploy_config_name}", 
+        "config_step", 
+        "compute_extraconfig", 
+        "extraconfig", 
+        "service_names", 
+        "service_configs", 
+        "compute", 
+        "bootstrap_node", 
+        "all_nodes", 
+        "vip_data", 
+        "net_ip_map", 
+        "\"%{::osfamily}\"", 
+        "neutron_bigswitch_data", 
+        "neutron_cisco_data", 
+        "cisco_n1kv_data", 
+        "midonet_data", 
+        "cisco_aci_data"
+      ], 
+      "datafiles": {
+        "compute": {
+          "tripleo::packages::enable_upgrade": false, 
+          "fqdn_tenant": "overcloud-novacompute-0.tenant.localdomain", 
+          "tripleo::profile::base::logging::fluentd::fluentd_sources": [], 
+          "fqdn_internal_api": "overcloud-novacompute-0.internalapi.localdomain", 
+          "fqdn_storage_mgmt": "overcloud-novacompute-0.storagemgmt.localdomain", 
+          "fqdn_management": "overcloud-novacompute-0.management.localdomain", 
+          "fqdn_external": "overcloud-novacompute-0.external.localdomain", 
+          "tripleo::clouddomain": "localdomain", 
+          "fqdn_storage": "overcloud-novacompute-0.storage.localdomain", 
+          "fqdn_canonical": "overcloud-novacompute-0.localdomain", 
+          "fqdn_ctlplane": "overcloud-novacompute-0.ctlplane.localdomain", 
+          "tripleo::profile::base::logging::fluentd::fluentd_groups": [
+            "root"
+          ]
+        }, 
+        "compute_extraconfig": {}, 
+        "net_ip_map": {
+          "tenant": "192.168.24.13", 
+          "management": "192.168.24.13", 
+          "tenant_uri": "192.168.24.13", 
+          "ctlplane_uri": "192.168.24.13", 
+          "management_uri": "192.168.24.13", 
+          "management_subnet": "192.168.24.13/24", 
+          "storage": "192.168.24.13", 
+          "internal_api_subnet": "192.168.24.13/24", 
+          "storage_subnet": "192.168.24.13/24", 
+          "external_subnet": "192.168.24.13/24", 
+          "ctlplane": "192.168.24.13", 
+          "storage_mgmt_subnet": "192.168.24.13/24", 
+          "external": "192.168.24.13", 
+          "ctlplane_subnet": "192.168.24.13/24", 
+          "storage_mgmt": "192.168.24.13", 
+          "internal_api_uri": "192.168.24.13", 
+          "external_uri": "192.168.24.13", 
+          "storage_uri": "192.168.24.13", 
+          "internal_api": "192.168.24.13", 
+          "storage_mgmt_uri": "192.168.24.13", 
+          "tenant_subnet": "192.168.24.13/24"
+        }, 
+        "extraconfig": {}, 
+        "service_configs": {
+          "neutron::plugins::ml2::tenant_network_types": [
+            "vxlan"
+          ], 
+          "tripleo::profile::base::nova::migration::client::nova_compute_enabled": true, 
+          "nova::rabbit_port": 5672, 
+          "neutron::debug": false, 
+          "tripleo::profile::base::database::mysql::client::ssl_ca": "/etc/ipa/ca.crt", 
+          "nova::placement::password": "ePtbUHubCqvanb7c8da8AAupz", 
+          "snmp::snmpd_options": "-LS0-5d", 
+          "ceilometer::agent::compute::instance_discovery_method": "libvirt_metadata", 
+          "ceilometer_redis_password": "DRMmzyDvmMuhG2AytUCHfpKTW", 
+          "nova::notification_format": "unversioned", 
+          "nova::compute::vcpu_pin_set": [], 
+          "ceilometer::keystone::authtoken::user_domain_name": "Default", 
+          "nova::use_ipv6": false, 
+          "ceilometer::agent::auth::auth_endpoint_type": "internalURL", 
+          "neutron::rabbit_heartbeat_timeout_threshold": 60, 
+          "neutron::dns_domain": "openstacklocal", 
+          "nova::compute::pci::passthrough": "", 
+          "nova::compute::libvirt::qemu::configure_qemu": true, 
+          "neutron::db::sync::extra_params": "", 
+          "nova::cron::archive_deleted_rows::monthday": "*", 
+          "neutron::rabbit_port": 5672, 
+          "tripleo.snmp.firewall_rules": {
+            "124 snmp": {
+              "dport": 161, 
+              "source": "%{hiera('snmpd_network')}", 
+              "proto": "udp"
+            }
+          }, 
+          "tripleo.nova_libvirt.firewall_rules": {
+            "200 nova_libvirt": {
+              "dport": [
+                16514, 
+                "49152-49215", 
+                "5900-6923"
+              ]
+            }
+          }, 
+          "nova::compute::consecutive_build_service_disable_threshold": "10", 
+          "tripleo.neutron_ovs_agent.firewall_rules": {
+            "136 neutron gre networks": {
+              "proto": "gre"
+            }, 
+            "118 neutron vxlan networks": {
+              "dport": 4789, 
+              "proto": "udp"
+            }
+          }, 
+          "neutron::host": "%{::fqdn}", 
+          "ceilometer::agent::auth::auth_project_domain_name": "Default", 
+          "nova::compute::vncproxy_host": "192.168.24.7", 
+          "neutron::rabbit_use_ssl": "False", 
+          "tripleo::profile::base::nova::migration::client::ssh_private_key": "-----BEGIN RSA PRIVATE KEY-----\nMIIEpgIBAAKCAQEArcpd5eXsQqQo5CUMCBLWrN5E+4amqCm0HjOmrGU7mcDrmqy3\n1/buCfOn+rYRq3ZMkoEeZS0cNZaLk+0MNvU80MJeFvGIPNljdcjq06lC0Aba0Cap\niN6jDOQqy08q1wEiPqZ4zkxBouUASqFtZ1z5TFOQYKLb8F0KIw0hBpEl59IC5Qlv\nAfklgRtAIGEqpyVwp0EXc4hyaZzSjYY2V9PIlOldRSSWYKx3/u5Qjk4V0uY0SwZ3\nVI2A3XfxjtE+fWgkmqqrZcO3Jx316T/WqzAn8P7rvReFJedikIvP18GDZu1HsIrM\n0OTmV0QEMszZl0c+eY2FECZLK1QLQFxqq1/+IQIDAQABAoIBAQCb+R1gsYPjI3XX\nnDA6Jr4ok6uRmn2EOzl+SZjy7EAbc/t/7DdrSiDFKbq+1hzxp9B9RAjFgUDqD1zh\nvEPUJzEXovnS2Z8ODYSoN1QZ9rUSArTrT2ekgTwQ285UfY7TPB9B3yJY9DOMQL6M\nPGj19YmAqRbQxBlklfv9DVFwlWBRtrx8MN+Qi1jlx2xmcLNHEJgjTcjIR5nOe+sh\nuVt4kn+bPn5j1iGpG2dKIN/GESveOEtFbUZB5Q6GwEOJfTP5eptJV8gTAlm+9RCQ\nSaKlKOONoWTW17IQvYhDsUHJmwpIc2cOA6ZMzEgjxyQN7myycznUY0yWfNGVCd0p\ns8t+pDApAoGBAOI58602ydQ/Q+PCQsPTOjAo6b0PT//1hxfVcKvAH+0Vv5rDX8yf\nBzAXzpHFH9gjM5U5l/vPOSEpbDuyEhjaKxSXJewy93Z5PR7qj/GXSG0oOOpYdXVJ\nLkY1/3IjA8ESt/F0Vt6h6E5z4BPw71lG7ANZmFpo5Y1gFk+YRrA3fIh7AoGBAMSp\nvRCOsyVGiltyDoRASSm4320q4VQx9KBqKA9eE6lvuqK7nmA9bGtVXqw9kZJpuBBn\n8kZa+88m5Mf8ntiEyVrSu2po+YybC9XC+J6ZnzcjmGzKyCIEv+VpikMBLLYQ6asD\nkPUaF7Rp5n59RgakkS6k0H0tCjJaH9tyzqX1q4cTAoGBAKoGtEYzL23+PqAnmNZl\nIw6fMU2O/Kl7d5VKLexn8ZbXCbLftFiuDVDwE6krZsujaVl2d+whyuZJo7caFs/m\n6QoIr8/eXm8EoBNkZ9tDwIOJ/3ziDyWfYtASNXMrLd8mmmk27zNUrKyKGpfiNYH7\n89ZwuDj7Lcwbs6kO4dH/YfGRAoGBALph38Q0acYXD4NRGj7uqig3hNByhjEEU0JA\nuYyu7VV0hV47EANH01v6AYqdozwuo3ow+WUCT4no44RBf83WMvq3o1Va/b7rJpFF\ngdjV4RYhzxC0Mm5DMBbdKmMMVvKKHtqru5L/Up3yi7cvRNGA3/Nj0hAAQpyr22tg\naEbTCOgvAoGBAMaXEUEvohFLyhBFG+RDCF7WMbXBvgd53N2KRLfBj1hE/MIBn2zW\nkcb+Yl4Q5J4Xfc16SEZuJvSPZiXAwhAxzMRg5IlG1KC/69cihR6NoByiGkm0zG7f\nuRDRk1ar57QAOwJiupTk2Axx/S14wxBTaCyC446xnFlky2Xm8V+g7M22\n-----END RSA PRIVATE KEY-----\n", 
+          "nova::notify_on_state_change": "vm_and_task_state", 
+          "neutron::core_plugin": "ml2", 
+          "ceilometer::rabbit_use_ssl": "False", 
+          "ceilometer::debug": false, 
+          "ceilometer::rabbit_password": "HtKmbZvPhP8ThyFQxb3PkTKsC", 
+          "neutron::notification_driver": "messagingv2", 
+          "nova::rabbit_password": "HtKmbZvPhP8ThyFQxb3PkTKsC", 
+          "neutron::plugins::ml2::tunnel_id_ranges": [
+            "1:4094"
+          ], 
+          "neutron::db::database_max_retries": -1, 
+          "tripleo::profile::base::nova::compute::cinder_nfs_backend": false, 
+          "cold_migration_ssh_inbound_addr": "192.168.24.13", 
+          "neutron::allow_overlapping_ips": true, 
+          "nova::placement::project_name": "service", 
+          "nova::compute::verify_glance_signatures": false, 
+          "nova::db::sync_api::db_sync_timeout": 300, 
+          "neutron::dhcp_agent_notification": true, 
+          "neutron::plugins::ml2::extension_drivers": [
+            "qos", 
+            "port_security"
+          ], 
+          "ceilometer::agent::polling::manage_polling": false, 
+          "snmp::agentaddress": [
+            "udp:161", 
+            "udp6:[::1]:161"
+          ], 
+          "nova::placement_database_connection": "mysql+pymysql://nova_placement:ePtbUHubCqvanb7c8da8AAupz@192.168.24.7/nova_placement?read_default_group=tripleo&read_default_file=/etc/my.cnf.d/tripleo.cnf", 
+          "nova::compute::libvirt::qemu::max_files": 32768, 
+          "neutron::service_plugins": [
+            "router", 
+            "qos", 
+            "trunk"
+          ], 
+          "neutron::agents::ml2::ovs::arp_responder": false, 
+          "snmpd_network": "192.168.24.13/24", 
+          "ceilometer::agent::notification::pipeline_publishers": [
+            "gnocchi://"
+          ], 
+          "nova::compute::rbd::rbd_keyring": "client.openstack", 
+          "neutron::plugins::ml2::mechanism_drivers": [
+            "openvswitch"
+          ], 
+          "nova::cron::archive_deleted_rows::until_complete": false, 
+          "nova::compute::libvirt::libvirt_enabled_perf_events": [], 
+          "nova::db::sync::db_sync_timeout": 300, 
+          "neutron::agents::ml2::ovs::enable_distributed_routing": false, 
+          "ceilometer::agent::notification::event_pipeline_publishers": [
+            "gnocchi://", 
+            "panko://"
+          ], 
+          "nova::compute::libvirt::vncserver_listen": "192.168.24.13", 
+          "rbd_persistent_storage": false, 
+          "ceilometer::telemetry_secret": "aw3hrtZzDVBFz99nR2uJJ6rEY", 
+          "tripleo.nova_migration_target.firewall_rules": {
+            "113 nova_migration_target": {
+              "dport": [
+                2022
+              ]
+            }
+          }, 
+          "neutron::rabbit_user": "guest", 
+          "tripleo::profile::base::nova::migration::client::ssh_port": 2022, 
+          "nova::compute::rbd::libvirt_rbd_user": "openstack", 
+          "nova::cron::archive_deleted_rows::month": "*", 
+          "nova::db::database_max_retries": -1, 
+          "nova::glance_api_servers": "http://192.168.24.7:9292", 
+          "nova::debug": false, 
+          "neutron::plugins::ml2::firewall_driver": "iptables_hybrid", 
+          "ntp::minpoll:": 6, 
+          "nova::compute::instance_usage_audit_period": "hour", 
+          "nova::rabbit_heartbeat_timeout_threshold": 60, 
+          "tripleo::profile::base::sshd::bannertext": "", 
+          "ceilometer::dispatcher::gnocchi::filter_project": "service", 
+          "vswitch::ovs::enable_hw_offload": false, 
+          "nova::compute::libvirt::manage_libvirt_services": false, 
+          "neutron::db::sync::db_sync_timeout": 300, 
+          "ceilometer::agent::auth::auth_user_domain_name": "Default", 
+          "nova::cinder_catalog_info": "volumev3:cinderv3:internalURL", 
+          "neutron::plugins::ml2::flat_networks": [
+            "datacentre"
+          ], 
+          "nova::network::neutron::neutron_project_name": "service", 
+          "tripleo::firewall::manage_firewall": true, 
+          "nova::cron::archive_deleted_rows::destination": "/var/log/nova/nova-rowsflush.log", 
+          "sysctl_settings": {
+            "net.ipv4.conf.all.arp_accept": {
+              "value": 1
+            }, 
+            "net.ipv4.conf.all.secure_redirects": {
+              "value": 0
+            }, 
+            "net.ipv6.conf.default.autoconf": {
+              "value": 0
+            }, 
+            "net.ipv6.conf.default.accept_redirects": {
+              "value": 0
+            }, 
+            "net.ipv4.ip_forward": {
+              "value": 1
+            }, 
+            "net.nf_conntrack_max": {
+              "value": 500000
+            }, 
+            "fs.inotify.max_user_instances": {
+              "value": 1024
+            }, 
+            "net.ipv4.conf.default.log_martians": {
+              "value": 1
+            }, 
+            "net.ipv4.conf.all.send_redirects": {
+              "value": 0
+            }, 
+            "net.core.netdev_max_backlog": {
+              "value": 10000
+            }, 
+            "net.ipv4.neigh.default.gc_thresh1": {
+              "value": 1024
+            }, 
+            "net.ipv6.conf.all.autoconf": {
+              "value": 0
+            }, 
+            "net.ipv4.tcp_keepalive_probes": {
+              "value": 5
+            }, 
+            "kernel.pid_max": {
+              "value": 1048576
+            }, 
+            "net.ipv4.conf.all.log_martians": {
+              "value": 1
+            }, 
+            "fs.suid_dumpable": {
+              "value": 0
+            }, 
+            "net.ipv4.conf.default.accept_redirects": {
+              "value": 0
+            }, 
+            "net.ipv6.conf.all.accept_ra": {
+              "value": 0
+            }, 
+            "net.ipv4.conf.default.secure_redirects": {
+              "value": 0
+            }, 
+            "net.ipv4.tcp_keepalive_time": {
+              "value": 5
+            }, 
+            "net.ipv6.conf.default.accept_ra": {
+              "value": 0
+            }, 
+            "kernel.dmesg_restrict": {
+              "value": 1
+            }, 
+            "net.ipv6.conf.all.accept_redirects": {
+              "value": 0
+            }, 
+            "net.ipv6.conf.all.disable_ipv6": {
+              "value": 0
+            }, 
+            "net.ipv4.tcp_keepalive_intvl": {
+              "value": 1
+            }, 
+            "net.netfilter.nf_conntrack_max": {
+              "value": 500000
+            }, 
+            "net.ipv4.neigh.default.gc_thresh2": {
+              "value": 2048
+            }, 
+            "net.ipv4.neigh.default.gc_thresh3": {
+              "value": 4096
+            }, 
+            "net.ipv4.conf.default.send_redirects": {
+              "value": 0
+            }, 
+            "net.ipv6.conf.default.disable_ipv6": {
+              "value": 0
+            }
+          }, 
+          "tripleo::profile::base::nova::migration::target::ssh_authorized_keys": [
+            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtyl3l5exCpCjkJQwIEtas3kT7hqaoKbQeM6asZTuZwOuarLfX9u4J86f6thGrdkySgR5lLRw1louT7Qw29TzQwl4W8Yg82WN1yOrTqULQBtrQJqmI3qMM5CrLTyrXASI+pnjOTEGi5QBKoW1nXPlMU5BgotvwXQojDSEGkSXn0gLlCW8B+SWBG0AgYSqnJXCnQRdziHJpnNKNhjZX08iU6V1FJJZgrHf+7lCOThXS5jRLBndUjYDdd/GO0T59aCSaqqtlw7cnHfXpP9arMCfw/uu9F4Ul52KQi8/XwYNm7UewiszQ5OZXRAQyzNmXRz55jYUQJksrVAtAXGqrX/4h Generated by TripleO"
+          ], 
+          "nova::vncproxy::common::vncproxy_protocol": "http", 
+          "nova::cron::archive_deleted_rows::minute": "1", 
+          "nova::network::neutron::dhcp_domain": "", 
+          "ceilometer::agent::auth::auth_password": "FtXc7xgX8w2EJbXcCe3psFzv4", 
+          "nova::network::neutron::neutron_auth_type": "v3password", 
+          "nova::rabbit_userid": "guest", 
+          "nova::cron::archive_deleted_rows::user": "nova", 
+          "nova::cell0_database_connection": "mysql+pymysql://nova:ePtbUHubCqvanb7c8da8AAupz@192.168.24.7/nova_cell0?read_default_group=tripleo&read_default_file=/etc/my.cnf.d/tripleo.cnf", 
+          "neutron::plugins::ml2::network_vlan_ranges": [
+            "datacentre:1:1000"
+          ], 
+          "tripleo::profile::base::snmp::snmpd_password": "cda3740a255af021a3b68fd8bd89f70a2aeb80e1", 
+          "neutron::global_physnet_mtu": 1500, 
+          "ceilometer::rabbit_userid": "guest", 
+          "nova::placement::os_interface": "internal", 
+          "tripleo::profile::base::snmp::snmpd_user": "ro_snmp_user", 
+          "neutron::db::database_db_max_retries": -1, 
+          "nova::compute::rbd::libvirt_images_rbd_pool": "vms", 
+          "ceilometer::notification_driver": "messagingv2", 
+          "ceilometer::keystone::authtoken::auth_url": "http://192.168.24.7:5000", 
+          "neutron::plugins::ml2::type_drivers": [
+            "vxlan", 
+            "vlan", 
+            "flat", 
+            "gre"
+          ], 
+          "ceilometer::keystone::authtoken::auth_uri": "http://192.168.24.7:5000", 
+          "ceilometer::host": "%{::fqdn}", 
+          "nova::compute::libvirt::migration_support": false, 
+          "tripleo::profile::base::docker::configure_network": true, 
+          "tripleo::packages::enable_install": false, 
+          "ceilometer::dispatcher::gnocchi::resources_definition_file": "gnocchi_resources.yaml", 
+          "neutron::plugins::ml2::vni_ranges": [
+            "1:4094"
+          ], 
+          "nova::placement::os_region_name": "regionOne", 
+          "nova::api_database_connection": "mysql+pymysql://nova_api:ePtbUHubCqvanb7c8da8AAupz@192.168.24.7/nova_api?read_default_group=tripleo&read_default_file=/etc/my.cnf.d/tripleo.cnf", 
+          "nova::network::neutron::neutron_password": "22PeyXGFu7qJevbd3VtKnTeh3", 
+          "nova::compute::rbd::ephemeral_storage": false, 
+          "ceilometer::dispatcher::gnocchi::url": "http://192.168.24.7:8041", 
+          "ceilometer::dispatcher::gnocchi::archive_policy": "low", 
+          "nova::compute::libvirt::libvirt_virt_type": "kvm", 
+          "tripleo::profile::base::sshd::motd": "", 
+          "kernel_modules": {
+            "nf_conntrack": {}, 
+            "nf_conntrack_proto_sctp": {}
+          }, 
+          "tripleo::profile::base::docker::docker_options": "--log-driver=journald --signature-verification=false --iptables=false --live-restore", 
+          "ntp::iburst_enable": true, 
+          "nova::network::neutron::neutron_auth_url": "http://192.168.24.7:35357/v3", 
+          "neutron::agents::ml2::ovs::extensions": [
+            "qos"
+          ], 
+          "ntp::servers": [
+            "clock.redhat.com"
+          ], 
+          "ceilometer::snmpd_readonly_username": "ro_snmp_user", 
+          "ceilometer::snmpd_readonly_user_password": "cda3740a255af021a3b68fd8bd89f70a2aeb80e1", 
+          "tripleo::trusted_cas::ca_map": {}, 
+          "ceilometer::keystone::authtoken::password": "FtXc7xgX8w2EJbXcCe3psFzv4", 
+          "tripleo::profile::base::nova::migration::target::ssh_localaddrs": [
+            "%{hiera('cold_migration_ssh_inbound_addr')}", 
+            "%{hiera('live_migration_ssh_inbound_addr')}"
+          ], 
+          "nova::rabbit_use_ssl": "False", 
+          "nova::network::neutron::neutron_ovs_bridge": "br-int", 
+          "nova::migration::live_migration_tunnelled": false, 
+          "compute_namespace": true, 
+          "nova::compute::reserved_host_memory": 4096, 
+          "nova::compute::rbd::libvirt_rbd_secret_uuid": "22f50ba8-0c66-11e8-975e-009f0adb7cdc", 
+          "tripleo::profile::base::sshd::options": {
+            "Subsystem": "sftp  /usr/libexec/openssh/sftp-server", 
+            "UsePAM": "yes", 
+            "UsePrivilegeSeparation": "sandbox", 
+            "GSSAPICleanupCredentials": "no", 
+            "SyslogFacility": "AUTHPRIV", 
+            "GSSAPIAuthentication": "yes", 
+            "PasswordAuthentication": "no", 
+            "AuthorizedKeysFile": ".ssh/authorized_keys", 
+            "AcceptEnv": [
+              "LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES", 
+              "LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT", 
+              "LC_IDENTIFICATION LC_ALL LANGUAGE", 
+              "XMODIFIERS"
+            ], 
+            "HostKey": [
+              "/etc/ssh/ssh_host_rsa_key", 
+              "/etc/ssh/ssh_host_ecdsa_key", 
+              "/etc/ssh/ssh_host_ed25519_key"
+            ], 
+            "UseDNS": "no", 
+            "X11Forwarding": "yes", 
+            "ChallengeResponseAuthentication": "no"
+          }, 
+          "nova::placement::auth_url": "http://192.168.24.7:5000", 
+          "nova::compute::instance_usage_audit": true, 
+          "nova::database_connection": "mysql+pymysql://nova:ePtbUHubCqvanb7c8da8AAupz@192.168.24.7/nova?read_default_group=tripleo&read_default_file=/etc/my.cnf.d/tripleo.cnf", 
+          "ntp::maxpoll:": 10, 
+          "tripleo::profile::base::certmonger_user::libvirt_postsave_cmd": "true", 
+          "nova::cron::archive_deleted_rows::max_rows": "100", 
+          "nova::compute::rbd::libvirt_images_rbd_ceph_conf": "/etc/ceph/ceph.conf", 
+          "nova::vncproxy::common::vncproxy_port": "6080", 
+          "tripleo::profile::base::docker::network_options": "--bip=172.31.0.1/24", 
+          "timezone::timezone": "UTC", 
+          "ceilometer::agent::notification::manage_event_pipeline": true, 
+          "tripleo::profile::base::database::mysql::client::enable_ssl": false, 
+          "nova::cron::archive_deleted_rows::weekday": "*", 
+          "tripleo::profile::base::database::mysql::client::mysql_client_bind_address": "192.168.24.13", 
+          "ceilometer::agent::notification::manage_pipeline": false, 
+          "ceilometer::rabbit_port": 5672, 
+          "nova::network::neutron::neutron_url": "http://192.168.24.7:9696", 
+          "neutron::plugins::ml2::overlay_ip_version": 4, 
+          "tripleo::profile::base::docker::debug": false, 
+          "neutron::agents::ml2::ovs::local_ip": "192.168.24.13", 
+          "ceilometer::agent::auth::auth_tenant_name": "service", 
+          "nova::notification_driver": "messagingv2", 
+          "neutron::agents::ml2::ovs::tunnel_types": [
+            "vxlan"
+          ], 
+          "nova::compute::rbd::libvirt_rbd_secret_key": "AQBAmHtaAAAAABAAFdts6gCMLXSCo5IhAC+hGA==", 
+          "tripleo::profile::base::nova::migration::client::libvirt_enabled": true, 
+          "neutron::agents::ml2::ovs::bridge_mappings": [
+            "datacentre:br-ex"
+          ], 
+          "ceilometer::keystone::authtoken::project_domain_name": "Default", 
+          "nova::compute::libvirt::services::libvirt_virt_type": "kvm", 
+          "tripleo::profile::base::sshd::port": 22, 
+          "nova::vncproxy::common::vncproxy_host": "192.168.24.7", 
+          "tripleo.ntp.firewall_rules": {
+            "105 ntp": {
+              "dport": 123, 
+              "proto": "udp"
+            }
+          }, 
+          "nova::network::neutron::neutron_region_name": "regionOne", 
+          "ceilometer::agent::auth::auth_region": "regionOne", 
+          "nova::host": "%{::fqdn}", 
+          "nova::cron::archive_deleted_rows::hour": "0", 
+          "nova::my_ip": "192.168.24.13", 
+          "tripleo::profile::base::tuned::profile": "", 
+          "nova::compute::neutron::libvirt_vif_driver": "", 
+          "nova::compute::vncserver_proxyclient_address": "192.168.24.13", 
+          "neutron::purge_config": false, 
+          "nova::db::database_db_max_retries": -1, 
+          "tripleo::firewall::purge_firewall_rules": false, 
+          "ceilometer::rabbit_heartbeat_timeout_threshold": 60, 
+          "live_migration_ssh_inbound_addr": "192.168.24.13", 
+          "nova::compute::libvirt::qemu::max_processes": 131072, 
+          "ceilometer::keystone::authtoken::project_name": "service", 
+          "nova::network::neutron::neutron_username": "neutron", 
+          "neutron::rabbit_password": "HtKmbZvPhP8ThyFQxb3PkTKsC", 
+          "neutron::agents::ml2::ovs::l2_population": "False", 
+          "nova::purge_config": false, 
+          "ceilometer::agent::auth::auth_url": "http://192.168.24.7:5000"
+        }, 
+        "service_names": {
+          "sensu::subscriptions": [], 
+          "service_names": [
+            "ca_certs", 
+            "ceilometer_agent_compute", 
+            "neutron_plugin_ml2", 
+            "neutron_ovs_agent", 
+            "docker", 
+            "iscsid", 
+            "kernel", 
+            "mysql_client", 
+            "nova_compute", 
+            "nova_libvirt", 
+            "nova_migration_target", 
+            "ntp", 
+            "logrotate_crond", 
+            "snmp", 
+            "sshd", 
+            "timezone", 
+            "tripleo_firewall", 
+            "tripleo_packages", 
+            "tuned"
+          ]
+        }
+      }, 
+      "merge_behavior": "deeper"
+    }
+  creation_time: "2018-03-09T19:45:58Z"
+  deployment_name: NovaComputeDeployment
+  group: hiera
+  id: 9fe72db3-0f31-4619-8dea-0dd4076aa9e6
+  inputs:
+    - name: enable_package_upgrade
+      description: None
+      type: String
+      value: |-
+        False
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-Compute-gns5j7srqhbw-0-nkubhw637az4-NovaComputeDeployment-ezuamikqs7jb/69e6dc43-2fd2-43b9-9fb1-aada83055264
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+
+SshHostPubKeyDeployment:
+  config: |
+    #!/bin/sh -x
+    test -e '/etc/ssh/ssh_host_rsa_key.pub' && cat /etc/ssh/ssh_host_rsa_key.pub > $heat_outputs_path.rsa
+    test -e '/etc/ssh/ssh_host_ecdsa_key.pub' && cat /etc/ssh/ssh_host_ecdsa_key.pub > $heat_outputs_path.ecdsa
+    test -e '/etc/ssh/ssh_host_ed25519_key.pub' && cat /etc/ssh/ssh_host_ed25519_key.pub > $heat_outputs_path.ed25519
+  creation_time: "2018-03-09T19:46:14Z"
+  deployment_name: SshHostPubKeyDeployment
+  group: script
+  id: da3cbdd3-6b24-4c5b-8631-498c0ded828f
+  inputs:
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-Compute-gns5j7srqhbw-0-nkubhw637az4-SshHostPubKey-jwk5ml5oxryq-SshHostPubKeyDeployment-lswd475ql2jg/212e1f5a-0e42-47e1-a64d-232845741299
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+    - name: rsa
+      description: 
+      type: String
+    - name: ecdsa
+      description: 
+      type: String
+    - name: ed25519
+      description: 
+      type: String
+
+ComputeHostsDeployment:
+  config: |
+    #!/bin/bash
+    set -eux
+    set -o pipefail
+    
+    write_entries() {
+        local file="$1"
+        local entries="$2"
+    
+        # Don't do anything if the file isn't there
+        if [ ! -f "$file" ]; then
+            return
+        fi
+    
+        if grep -q "^# HEAT_HOSTS_START" "$file"; then
+            temp=$(mktemp)
+            (
+            sed '/^# HEAT_HOSTS_START/,$d' "$file"
+            echo -ne "\n# HEAT_HOSTS_START - Do not edit manually within this section!\n"
+            echo "$entries"
+            echo -ne "# HEAT_HOSTS_END\n\n"
+            sed '1,/^# HEAT_HOSTS_END/d' "$file"
+            ) > "$temp"
+            echo "INFO: Updating hosts file $file, check below for changes"
+            diff "$file" "$temp" || true
+            cat "$temp" > "$file"
+        else
+            echo -ne "\n# HEAT_HOSTS_START - Do not edit manually within this section!\n" >> "$file"
+            echo "$entries" >> "$file"
+            echo -ne "# HEAT_HOSTS_END\n\n" >> "$file"
+        fi
+    
+    }
+    
+    if [ ! -z "$hosts" ]; then
+        for tmpl in /etc/cloud/templates/hosts.*.tmpl ; do
+            write_entries "$tmpl" "$hosts"
+        done
+        write_entries "/etc/hosts" "$hosts"
+    else
+        echo "No hosts in Heat, nothing written."
+    fi
+  creation_time: "2018-03-09T19:46:36Z"
+  deployment_name: ComputeHostsDeployment
+  group: script
+  id: bcccde22-74c1-44fe-aa38-1f3cc5636517
+  inputs:
+    - name: hosts
+      description: 
+      type: String
+      value: |-
+        192.168.24.7  overcloud.ctlplane.localdomain
+        192.168.24.7  overcloud.storage.localdomain
+        192.168.24.7  overcloud.storagemgmt.localdomain
+        192.168.24.7  overcloud.internalapi.localdomain
+        192.168.24.7  overcloud.localdomain
+        192.168.24.16 overcloud-controller-0.localdomain overcloud-controller-0
+        192.168.24.16 overcloud-controller-0.storage.localdomain overcloud-controller-0.storage
+        192.168.24.16 overcloud-controller-0.storagemgmt.localdomain overcloud-controller-0.storagemgmt
+        192.168.24.16 overcloud-controller-0.internalapi.localdomain overcloud-controller-0.internalapi
+        192.168.24.16 overcloud-controller-0.tenant.localdomain overcloud-controller-0.tenant
+        192.168.24.16 overcloud-controller-0.external.localdomain overcloud-controller-0.external
+        192.168.24.16 overcloud-controller-0.management.localdomain overcloud-controller-0.management
+        192.168.24.16 overcloud-controller-0.ctlplane.localdomain overcloud-controller-0.ctlplane
+        192.168.24.12 overcloud-controller-1.localdomain overcloud-controller-1
+        192.168.24.12 overcloud-controller-1.storage.localdomain overcloud-controller-1.storage
+        192.168.24.12 overcloud-controller-1.storagemgmt.localdomain overcloud-controller-1.storagemgmt
+        192.168.24.12 overcloud-controller-1.internalapi.localdomain overcloud-controller-1.internalapi
+        192.168.24.12 overcloud-controller-1.tenant.localdomain overcloud-controller-1.tenant
+        192.168.24.12 overcloud-controller-1.external.localdomain overcloud-controller-1.external
+        192.168.24.12 overcloud-controller-1.management.localdomain overcloud-controller-1.management
+        192.168.24.12 overcloud-controller-1.ctlplane.localdomain overcloud-controller-1.ctlplane
+        192.168.24.18 overcloud-controller-2.localdomain overcloud-controller-2
+        192.168.24.18 overcloud-controller-2.storage.localdomain overcloud-controller-2.storage
+        192.168.24.18 overcloud-controller-2.storagemgmt.localdomain overcloud-controller-2.storagemgmt
+        192.168.24.18 overcloud-controller-2.internalapi.localdomain overcloud-controller-2.internalapi
+        192.168.24.18 overcloud-controller-2.tenant.localdomain overcloud-controller-2.tenant
+        192.168.24.18 overcloud-controller-2.external.localdomain overcloud-controller-2.external
+        192.168.24.18 overcloud-controller-2.management.localdomain overcloud-controller-2.management
+        192.168.24.18 overcloud-controller-2.ctlplane.localdomain overcloud-controller-2.ctlplane
+        
+        192.168.24.13 overcloud-novacompute-0.localdomain overcloud-novacompute-0
+        192.168.24.13 overcloud-novacompute-0.storage.localdomain overcloud-novacompute-0.storage
+        192.168.24.13 overcloud-novacompute-0.storagemgmt.localdomain overcloud-novacompute-0.storagemgmt
+        192.168.24.13 overcloud-novacompute-0.internalapi.localdomain overcloud-novacompute-0.internalapi
+        192.168.24.13 overcloud-novacompute-0.tenant.localdomain overcloud-novacompute-0.tenant
+        192.168.24.13 overcloud-novacompute-0.external.localdomain overcloud-novacompute-0.external
+        192.168.24.13 overcloud-novacompute-0.management.localdomain overcloud-novacompute-0.management
+        192.168.24.13 overcloud-novacompute-0.ctlplane.localdomain overcloud-novacompute-0.ctlplane
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-ComputeHostsDeployment-va2ikfbzxaop-0-wf7xm2pju546/ea1f0041-bfe3-419e-9186-dcaeacaf192d
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+
+ComputeSshKnownHostsDeployment:
+  config: |
+    #!/bin/bash
+    set -eux
+    set -o pipefail
+    
+    echo "Creating ssh known hosts file"
+    
+    if [ ! -z "${known_hosts}" ]; then
+      echo "${known_hosts}"
+      echo -ne "${known_hosts}" > /etc/ssh/ssh_known_hosts
+      chmod 0644 /etc/ssh/ssh_known_hosts
+    else
+      rm -f /etc/ssh/ssh_known_hosts
+      echo "No ssh known hosts"
+    fi
+  creation_time: "2018-03-09T19:46:40Z"
+  deployment_name: ComputeSshKnownHostsDeployment
+  group: script
+  id: 7a71b0de-83af-4689-83b3-98f392001b0a
+  inputs:
+    - name: known_hosts
+      description: 
+      type: String
+      value: |-
+        192.168.24.16,overcloud-controller-0.localdomain,overcloud-controller-0,192.168.24.16,overcloud-controller-0.storage.localdomain,overcloud-controller-0.storage,192.168.24.16,overcloud-controller-0.storagemgmt.localdomain,overcloud-controller-0.storagemgmt,192.168.24.16,overcloud-controller-0.internalapi.localdomain,overcloud-controller-0.internalapi,192.168.24.16,overcloud-controller-0.tenant.localdomain,overcloud-controller-0.tenant,192.168.24.16,overcloud-controller-0.external.localdomain,overcloud-controller-0.external,192.168.24.16,overcloud-controller-0.management.localdomain,overcloud-controller-0.management,192.168.24.16,overcloud-controller-0.ctlplane.localdomain,overcloud-controller-0.ctlplane ecdsa192.168.24.12,overcloud-controller-1.localdomain,overcloud-controller-1,192.168.24.12,overcloud-controller-1.storage.localdomain,overcloud-controller-1.storage,192.168.24.12,overcloud-controller-1.storagemgmt.localdomain,overcloud-controller-1.storagemgmt,192.168.24.12,overcloud-controller-1.internalapi.localdomain,overcloud-controller-1.internalapi,192.168.24.12,overcloud-controller-1.tenant.localdomain,overcloud-controller-1.tenant,192.168.24.12,overcloud-controller-1.external.localdomain,overcloud-controller-1.external,192.168.24.12,overcloud-controller-1.management.localdomain,overcloud-controller-1.management,192.168.24.12,overcloud-controller-1.ctlplane.localdomain,overcloud-controller-1.ctlplane ecdsa192.168.24.18,overcloud-controller-2.localdomain,overcloud-controller-2,192.168.24.18,overcloud-controller-2.storage.localdomain,overcloud-controller-2.storage,192.168.24.18,overcloud-controller-2.storagemgmt.localdomain,overcloud-controller-2.storagemgmt,192.168.24.18,overcloud-controller-2.internalapi.localdomain,overcloud-controller-2.internalapi,192.168.24.18,overcloud-controller-2.tenant.localdomain,overcloud-controller-2.tenant,192.168.24.18,overcloud-controller-2.external.localdomain,overcloud-controller-2.external,192.168.24.18,overcloud-controller-2.management.localdomain,overcloud-controller-2.management,192.168.24.18,overcloud-controller-2.ctlplane.localdomain,overcloud-controller-2.ctlplane ecdsa192.168.24.13,overcloud-novacompute-0.localdomain,overcloud-novacompute-0,192.168.24.13,overcloud-novacompute-0.storage.localdomain,overcloud-novacompute-0.storage,192.168.24.13,overcloud-novacompute-0.storagemgmt.localdomain,overcloud-novacompute-0.storagemgmt,192.168.24.13,overcloud-novacompute-0.internalapi.localdomain,overcloud-novacompute-0.internalapi,192.168.24.13,overcloud-novacompute-0.tenant.localdomain,overcloud-novacompute-0.tenant,192.168.24.13,overcloud-novacompute-0.external.localdomain,overcloud-novacompute-0.external,192.168.24.13,overcloud-novacompute-0.management.localdomain,overcloud-novacompute-0.management,192.168.24.13,overcloud-novacompute-0.ctlplane.localdomain,overcloud-novacompute-0.ctlplane ecdsa
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-ComputeSshKnownHostsDeployment-eoafemxestmd-0-kwjyzia7zhit/a92716ae-883a-4f31-b4cd-8fbb615a8aa7
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+
+ComputeAllNodesDeployment:
+  config:
+    {
+      "datafiles": {
+        "all_nodes": {
+          "heat_api_enabled": "true", 
+          "cinder_volume_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "gnocchi_api_network": "internal_api", 
+          "mongodb_disabled_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "swift_proxy_short_bootstrap_node_name": "overcloud-controller-0", 
+          "gnocchi_metricd_short_bootstrap_node_name": "overcloud-controller-0", 
+          "cinder_volume_enabled": "true", 
+          "ca_certs_enabled": "true", 
+          "tuned_enabled": "true", 
+          "nova_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "swift_storage_node_names": [
+            "overcloud-controller-0.storagemgmt.localdomain", 
+            "overcloud-controller-1.storagemgmt.localdomain", 
+            "overcloud-controller-2.storagemgmt.localdomain"
+          ], 
+          "tripleo_packages_short_bootstrap_node_name": "overcloud-controller-0", 
+          "aodh_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "cinder_scheduler_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "nova_metadata_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "keystone_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "swift_proxy_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "aodh_api_network": "internal_api", 
+          "gnocchi_metricd_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "nova_metadata_enabled": "true", 
+          "nova_migration_target_short_node_names": [
+            "overcloud-novacompute-0"
+          ], 
+          "neutron_plugin_ml2_enabled": "true", 
+          "clustercheck_enabled": "true", 
+          "iscsid_enabled": "true", 
+          "redis_enabled": "true", 
+          "ntp_enabled": "true", 
+          "panko_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "neutron_ovs_agent_enabled": "true", 
+          "cellv2_discovery_hosts": "overcloud-novacompute-0.localdomain", 
+          "ceilometer_agent_central_enabled": "true", 
+          "heat_api_network": "internal_api", 
+          "nova_vnc_proxy_short_bootstrap_node_name": "overcloud-controller-0", 
+          "tripleo_packages_enabled": "true", 
+          "haproxy_enabled": "true", 
+          "timezone_enabled": "true", 
+          "keystone_admin_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "mysql_client_short_bootstrap_node_name": "overcloud-controller-0", 
+          "cinder_scheduler_short_bootstrap_node_name": "overcloud-controller-0", 
+          "neutron_dhcp_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_compute_enabled": "true", 
+          "nova_scheduler_short_bootstrap_node_name": "overcloud-controller-0", 
+          "ntp_short_bootstrap_node_name": "overcloud-controller-0", 
+          "memcached_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "gnocchi_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "neutron_ovs_agent_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "nova_libvirt_short_node_names": [
+            "overcloud-novacompute-0"
+          ], 
+          "docker_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "mongodb_disabled_enabled": "true", 
+          "ceilometer_agent_compute_short_bootstrap_node_name": "overcloud-novacompute-0", 
+          "nova_placement_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "nova_conductor_enabled": "true", 
+          "neutron_metadata_enabled": "true", 
+          "nova_metadata_short_bootstrap_node_name": "overcloud-controller-0", 
+          "sshd_enabled": "true", 
+          "ceilometer_api_disabled_enabled": "true", 
+          "swift_storage_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "nova_vnc_proxy_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "nova_placement_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "cinder_api_network": "internal_api", 
+          "horizon_enabled": "true", 
+          "cinder_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "heat_api_cfn_enabled": "true", 
+          "aodh_listener_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "timezone_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "nova_api_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "nova_consoleauth_enabled": "true", 
+          "heat_api_cfn_short_bootstrap_node_name": "overcloud-controller-0", 
+          "heat_engine_enabled": "true", 
+          "swift_ringbuilder_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_placement_enabled": "true", 
+          "cinder_api_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "ca_certs_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "swift_storage_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "keystone_admin_api_network": "ctlplane", 
+          "heat_engine_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "nova_consoleauth_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "panko_api_enabled": "true", 
+          "nova_api_enabled": "true", 
+          "keystone_public_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "swift_storage_enabled": "true", 
+          "gnocchi_api_enabled": "true", 
+          "nova_vnc_proxy_enabled": "true", 
+          "heat_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_libvirt_node_ips": [
+            "192.168.24.13"
+          ], 
+          "heat_api_cfn_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "kernel_enabled": "true", 
+          "neutron_api_network": "internal_api", 
+          "nova_metadata_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "aodh_notifier_enabled": "true", 
+          "neutron_api_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "keystone_admin_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "glance_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "memcached_network": "internal_api", 
+          "neutron_dhcp_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "gnocchi_api_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "cinder_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "aodh_notifier_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "ceilometer_agent_notification_short_bootstrap_node_name": "overcloud-controller-0", 
+          "mysql_network": "internal_api", 
+          "glance_api_enabled": "true", 
+          "cinder_scheduler_enabled": "true", 
+          "pacemaker_enabled": "true", 
+          "nova_vnc_proxy_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "nova_metadata_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "kernel_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "ntp_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "keystone_public_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "iscsid_short_bootstrap_node_name": "overcloud-controller-0", 
+          "ceilometer_collector_disabled_short_bootstrap_node_name": "overcloud-controller-0", 
+          "neutron_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "neutron_metadata_short_bootstrap_node_name": "overcloud-controller-0", 
+          "tripleo_firewall_short_bootstrap_node_name": "overcloud-controller-0", 
+          "aodh_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "snmp_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "clustercheck_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "nova_conductor_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "update_identifier": "", 
+          "neutron_metadata_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "heat_api_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "nova_placement_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "heat_api_cfn_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "horizon_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "cinder_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "keystone_enabled": "true", 
+          "tripleo_firewall_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "redis_short_bootstrap_node_name": "overcloud-controller-0", 
+          "mysql_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "tuned_short_bootstrap_node_name": "overcloud-controller-0", 
+          "aodh_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "logrotate_crond_short_bootstrap_node_name": "overcloud-controller-0", 
+          "glance_api_network": "internal_api", 
+          "memcached_enabled": "true", 
+          "redis_network": "internal_api", 
+          "mysql_enabled": "true", 
+          "ca_certs_short_bootstrap_node_name": "overcloud-controller-0", 
+          "aodh_listener_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_vnc_proxy_network": "internal_api", 
+          "keystone_admin_api_node_names": [
+            "overcloud-controller-0.ctlplane.localdomain", 
+            "overcloud-controller-1.ctlplane.localdomain", 
+            "overcloud-controller-2.ctlplane.localdomain"
+          ], 
+          "aodh_evaluator_enabled": "true", 
+          "ceilometer_agent_compute_enabled": "true", 
+          "tripleo_firewall_enabled": "true", 
+          "rabbitmq_short_bootstrap_node_name": "overcloud-controller-0", 
+          "mysql_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "sshd_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "heat_api_cfn_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "nova_api_network": "internal_api", 
+          "rabbitmq_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "nova_migration_target_short_bootstrap_node_name": "overcloud-novacompute-0", 
+          "swift_proxy_enabled": "true", 
+          "swift_storage_network": "storage_mgmt", 
+          "snmp_enabled": "true", 
+          "logrotate_crond_enabled": "true", 
+          "tripleo_packages_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "tuned_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "ceilometer_agent_notification_enabled": "true", 
+          "enabled_services": [
+            "aodh_api", 
+            "aodh_evaluator", 
+            "aodh_listener", 
+            "aodh_notifier", 
+            "ca_certs", 
+            "ceilometer_api_disabled", 
+            "ceilometer_collector_disabled", 
+            "ceilometer_expirer_disabled", 
+            "ceilometer_agent_central", 
+            "ceilometer_agent_notification", 
+            "cinder_api", 
+            "cinder_scheduler", 
+            "cinder_volume", 
+            "clustercheck", 
+            "docker", 
+            "glance_api", 
+            "gnocchi_api", 
+            "gnocchi_metricd", 
+            "gnocchi_statsd", 
+            "haproxy", 
+            "heat_api", 
+            "heat_api_cfn", 
+            "heat_engine", 
+            "horizon", 
+            "iscsid", 
+            "kernel", 
+            "keystone", 
+            "memcached", 
+            "mongodb_disabled", 
+            "mysql", 
+            "mysql_client", 
+            "neutron_api", 
+            "neutron_plugin_ml2", 
+            "neutron_dhcp", 
+            "neutron_l3", 
+            "neutron_metadata", 
+            "neutron_ovs_agent", 
+            "nova_api", 
+            "nova_conductor", 
+            "nova_consoleauth", 
+            "nova_metadata", 
+            "nova_placement", 
+            "nova_scheduler", 
+            "nova_vnc_proxy", 
+            "ntp", 
+            "logrotate_crond", 
+            "pacemaker", 
+            "panko_api", 
+            "rabbitmq", 
+            "redis", 
+            "snmp", 
+            "sshd", 
+            "swift_proxy", 
+            "swift_ringbuilder", 
+            "swift_storage", 
+            "timezone", 
+            "tripleo_firewall", 
+            "tripleo_packages", 
+            "tuned", 
+            "ceilometer_agent_compute", 
+            "nova_compute", 
+            "nova_libvirt", 
+            "nova_migration_target"
+          ], 
+          "glance_api_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "stack_update_type": "", 
+          "iscsid_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "horizon_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "gnocchi_statsd_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "mongodb_disabled_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_libvirt_enabled": "true", 
+          "redis_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "gnocchi_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_migration_target_enabled": "true", 
+          "ceilometer_agent_central_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "haproxy_short_bootstrap_node_name": "overcloud-controller-0", 
+          "clustercheck_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_libvirt_network": "internal_api", 
+          "memcached_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "swift_proxy_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "snmp_short_bootstrap_node_name": "overcloud-controller-0", 
+          "panko_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "mysql_client_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "neutron_plugin_ml2_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "aodh_listener_enabled": "true", 
+          "panko_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_placement_network": "internal_api", 
+          "nova_metadata_network": "internal_api", 
+          "nova_placement_short_bootstrap_node_name": "overcloud-controller-0", 
+          "keystone_public_api_network": "internal_api", 
+          "mysql_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "nova_libvirt_short_bootstrap_node_name": "overcloud-novacompute-0", 
+          "pacemaker_short_bootstrap_node_name": "overcloud-controller-0", 
+          "gnocchi_statsd_short_bootstrap_node_name": "overcloud-controller-0", 
+          "logrotate_crond_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2", 
+            "overcloud-novacompute-0"
+          ], 
+          "keystone_public_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "gnocchi_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "docker_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_scheduler_enabled": "true", 
+          "neutron_l3_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "nova_vnc_proxy_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "nova_libvirt_node_names": [
+            "overcloud-novacompute-0.internalapi.localdomain"
+          ], 
+          "heat_api_cfn_network": "internal_api", 
+          "neutron_l3_enabled": "true", 
+          "neutron_ovs_agent_short_bootstrap_node_name": "overcloud-controller-0", 
+          "rabbitmq_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "redis_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "cinder_volume_short_bootstrap_node_name": "overcloud-controller-0", 
+          "mysql_short_bootstrap_node_name": "overcloud-controller-0", 
+          "redis_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "neutron_plugin_ml2_short_bootstrap_node_name": "overcloud-controller-0", 
+          "ceilometer_agent_compute_short_node_names": [
+            "overcloud-novacompute-0"
+          ], 
+          "swift_proxy_node_names": [
+            "overcloud-controller-0.storage.localdomain", 
+            "overcloud-controller-1.storage.localdomain", 
+            "overcloud-controller-2.storage.localdomain"
+          ], 
+          "pacemaker_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "rabbitmq_network": "internal_api", 
+          "swift_storage_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "sshd_short_bootstrap_node_name": "overcloud-controller-0", 
+          "rabbitmq_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "glance_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "neutron_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "deploy_identifier": "1520623270", 
+          "horizon_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "swift_ringbuilder_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "neutron_l3_short_bootstrap_node_name": "overcloud-controller-0", 
+          "memcached_short_bootstrap_node_name": "overcloud-controller-0", 
+          "keystone_public_api_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "heat_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "ceilometer_expirer_disabled_enabled": "true", 
+          "swift_proxy_network": "storage", 
+          "nova_conductor_short_bootstrap_node_name": "overcloud-controller-0", 
+          "ceilometer_collector_disabled_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "ceilometer_api_disabled_short_bootstrap_node_name": "overcloud-controller-0", 
+          "aodh_notifier_short_bootstrap_node_name": "overcloud-controller-0", 
+          "ceilometer_agent_notification_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "rabbitmq_enabled": "true", 
+          "controller_node_ips": "192.168.24.16,192.168.24.12,192.168.24.18", 
+          "nova_compute_short_node_names": [
+            "overcloud-novacompute-0"
+          ], 
+          "ceilometer_agent_central_short_bootstrap_node_name": "overcloud-controller-0", 
+          "ceilometer_expirer_disabled_short_bootstrap_node_name": "overcloud-controller-0", 
+          "aodh_api_enabled": "true", 
+          "ceilometer_expirer_disabled_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "heat_engine_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_consoleauth_short_bootstrap_node_name": "overcloud-controller-0", 
+          "memcached_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "haproxy_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "horizon_network": "internal_api", 
+          "ceilometer_collector_disabled_enabled": "true", 
+          "neutron_api_enabled": "true", 
+          "cinder_api_enabled": "true", 
+          "stack_action": "CREATE", 
+          "nova_compute_short_bootstrap_node_name": "overcloud-novacompute-0", 
+          "aodh_api_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "neutron_dhcp_enabled": "true", 
+          "swift_ringbuilder_enabled": "true", 
+          "aodh_evaluator_short_bootstrap_node_name": "overcloud-controller-0", 
+          "keystone_short_bootstrap_node_name": "overcloud-controller-0", 
+          "nova_scheduler_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "gnocchi_statsd_enabled": "true", 
+          "neutron_api_short_bootstrap_node_name": "overcloud-controller-0", 
+          "keystone_admin_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "gnocchi_metricd_enabled": "true", 
+          "mysql_client_enabled": "true", 
+          "panko_api_node_names": [
+            "overcloud-controller-0.internalapi.localdomain", 
+            "overcloud-controller-1.internalapi.localdomain", 
+            "overcloud-controller-2.internalapi.localdomain"
+          ], 
+          "nova_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "glance_api_node_ips": [
+            "192.168.24.16", 
+            "192.168.24.12", 
+            "192.168.24.18"
+          ], 
+          "heat_api_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "panko_api_network": "internal_api", 
+          "docker_enabled": "true", 
+          "controller_node_names": "overcloud-controller-0,overcloud-controller-1,overcloud-controller-2", 
+          "kernel_short_bootstrap_node_name": "overcloud-controller-0", 
+          "aodh_evaluator_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ], 
+          "horizon_short_bootstrap_node_name": "overcloud-controller-0", 
+          "timezone_short_bootstrap_node_name": "overcloud-controller-0", 
+          "ceilometer_api_disabled_short_node_names": [
+            "overcloud-controller-0", 
+            "overcloud-controller-1", 
+            "overcloud-controller-2"
+          ]
+        }, 
+        "vip_data": {
+          "internal_api_virtual_ip": "192.168.24.7", 
+          "cloud_name_storage": "overcloud.storage.localdomain", 
+          "redis_vip": "192.168.24.9", 
+          "rabbitmq_vip": "192.168.24.7", 
+          "nova_libvirt_vip": "192.168.24.7", 
+          "public_virtual_ip": "192.168.24.7", 
+          "memcached_vip": "192.168.24.7", 
+          "neutron_api_vip": "192.168.24.7", 
+          "aodh_api_vip": "192.168.24.7", 
+          "horizon_vip": "192.168.24.7", 
+          "tripleo::keepalived::redis_virtual_ip": "192.168.24.9", 
+          "tripleo::haproxy::controller_virtual_ip": "192.168.24.7", 
+          "panko_api_vip": "192.168.24.7", 
+          "enable_internal_tls": false, 
+          "swift_proxy_vip": "192.168.24.7", 
+          "tripleo::keepalived::controller_virtual_ip": "192.168.24.7", 
+          "gnocchi_api_vip": "192.168.24.7", 
+          "heat_api_cfn_vip": "192.168.24.7", 
+          "nova_metadata_vip": "192.168.24.7", 
+          "tripleo::keepalived::public_virtual_ip": "192.168.24.7", 
+          "tripleo::haproxy::public_virtual_ip": "192.168.24.7", 
+          "tripleo::redis_notification::haproxy_monitor_ip": "192.168.24.7", 
+          "mysql_vip": "192.168.24.7", 
+          "nova_placement_vip": "192.168.24.7", 
+          "heat_api_vip": "192.168.24.7", 
+          "keystone_public_api_vip": "192.168.24.7", 
+          "nova_api_vip": "192.168.24.7", 
+          "cloud_name_internal_api": "overcloud.internalapi.localdomain", 
+          "glance_api_vip": "192.168.24.7", 
+          "controller_virtual_ip": "192.168.24.7", 
+          "keystone_admin_api_vip": "192.168.24.7", 
+          "cloud_name_external": "overcloud.localdomain", 
+          "cloud_name_ctlplane": "overcloud.ctlplane.localdomain", 
+          "swift_storage_vip": "192.168.24.7", 
+          "cinder_api_vip": "192.168.24.7", 
+          "cloud_name_storage_mgmt": "overcloud.storagemgmt.localdomain", 
+          "network_virtual_ips": {
+            "storage_mgmt": {
+              "index": 2, 
+              "ip_address": "192.168.24.7"
+            }, 
+            "storage": {
+              "index": 1, 
+              "ip_address": "192.168.24.7"
+            }, 
+            "internal_api": {
+              "index": 3, 
+              "ip_address": "192.168.24.7"
+            }
+          }, 
+          "nova_vnc_proxy_vip": "192.168.24.7"
+        }, 
+        "bootstrap_node": {
+          "bootstrap_nodeid": "overcloud-novacompute-0", 
+          "bootstrap_nodeid_ip": "192.168.24.13"
+        }
+      }
+    }
+  creation_time: "2018-03-09T19:46:51Z"
+  deployment_name: ComputeAllNodesDeployment
+  group: hiera
+  id: 696eff56-8c6d-4d30-9ea7-03445650bab5
+  inputs:
+    - name: bootstrap_nodeid
+      description: None
+      type: String
+      value: |-
+        overcloud-novacompute-0
+    - name: bootstrap_nodeid_ip
+      description: None
+      type: String
+      value: |-
+        192.168.24.13
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-ComputeAllNodesDeployment-fv675dlfue4t-0-a5hhu53n4ha5/17106138-d13a-4647-b40b-e6e2fd9dc894
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+
+ComputeAllNodesValidationDeployment:
+  config: |
+    #!/bin/bash
+    set -e
+    
+    function ping_retry() {
+      local IP_ADDR=$1
+      local TIMES=${2:-'10'}
+      local COUNT=0
+      local PING_CMD=ping
+      if [[ $IP_ADDR =~ ":" ]]; then
+        PING_CMD=ping6
+      fi
+      until [ $COUNT -ge $TIMES ]; do
+        if $PING_CMD -w 10 -c 1 $IP_ADDR &> /dev/null; then
+          echo "Ping to $IP_ADDR succeeded."
+          return 0
+        fi
+        echo "Ping to $IP_ADDR failed. Retrying..."
+        COUNT=$(($COUNT + 1))
+        sleep 60
+      done
+      return 1
+    }
+    
+    # For each unique remote IP (specified via Heat) we check to
+    # see if one of the locally configured networks matches and if so we
+    # attempt a ping test the remote network IP.
+    function ping_controller_ips() {
+      local REMOTE_IPS=$1
+      for REMOTE_IP in $(echo $REMOTE_IPS | sed -e "s| |\n|g" | sort -u); do
+        if [[ $REMOTE_IP =~ ":" ]]; then
+          networks=$(ip -6 r | grep -v default | cut -d " " -f 1 | grep -v "unreachable")
+        else
+          networks=$(ip r | grep -v default | cut -d " " -f 1)
+        fi
+        for LOCAL_NETWORK in $networks; do
+          in_network=$(python -c "import ipaddress; net=ipaddress.ip_network(unicode('$LOCAL_NETWORK')); addr=ipaddress.ip_address(unicode('$REMOTE_IP')); print(addr in net)")
+          if [[ $in_network == "True" ]]; then
+            echo "Trying to ping $REMOTE_IP for local network ${LOCAL_NETWORK}."
+            set +e
+            if ! ping_retry $REMOTE_IP; then
+              echo "FAILURE"
+              echo "$REMOTE_IP is not pingable. Local Network: $LOCAL_NETWORK" >&2
+              exit 1
+            fi
+            set -e
+            echo "SUCCESS"
+          fi
+        done
+      done
+    }
+    
+    # Ping all default gateways. There should only be one
+    # if using upstream t-h-t network templates but we test
+    # all of them should some manual network config have
+    # multiple gateways.
+    function ping_default_gateways() {
+      DEFAULT_GW=$(ip r | grep ^default | cut -d " " -f 3)
+      set +e
+      for GW in $DEFAULT_GW; do
+        echo -n "Trying to ping default gateway ${GW}..."
+        if ! ping_retry $GW; then
+          echo "FAILURE"
+          echo "$GW is not pingable."
+          exit 1
+        fi
+      done
+      set -e
+      echo "SUCCESS"
+    }
+    
+    # Verify the FQDN from the nova/ironic deployment matches
+    # FQDN in the heat templates.
+    function fqdn_check() {
+      HOSTNAME=$(hostname)
+      SHORT_NAME=$(hostname -s)
+      FQDN_FROM_HOSTS=$(awk '$3 == "'${SHORT_NAME}'"{print $2}' /etc/hosts)
+      echo -n "Checking hostname vs /etc/hosts entry..."
+      if [[ $HOSTNAME != $FQDN_FROM_HOSTS ]]; then
+        echo "FAILURE"
+        echo -e "System hostname: ${HOSTNAME}\nEntry from /etc/hosts: ${FQDN_FROM_HOSTS}\n"
+        exit 1
+      fi
+      echo "SUCCESS"
+    }
+    
+    # Verify at least one time source is available.
+    function ntp_check() {
+      NTP_SERVERS=$(hiera ntp::servers nil |tr -d '[],"')
+      if [[ "$NTP_SERVERS" != "nil" ]];then
+        echo -n "Testing NTP..."
+        NTP_SUCCESS=0
+        for NTP_SERVER in $NTP_SERVERS; do
+          set +e
+          NTPDATE_OUT=$(ntpdate -qud $NTP_SERVER 2>&1)
+          NTPDATE_EXIT=$?
+          set -e
+          if [[ "$NTPDATE_EXIT" == "0" ]];then
+            NTP_SUCCESS=1
+            break
+          else
+            NTPDATE_OUT_FULL="$NTPDATE_OUT_FULL $NTPDATE_OUT"
+          fi
+        done
+        if  [[ "$NTP_SUCCESS" == "0" ]];then
+          echo "FAILURE"
+          echo "$NTPDATE_OUT_FULL"
+          exit 1
+        fi
+        echo "SUCCESS"
+      fi
+    }
+    
+    ping_controller_ips "$ping_test_ips"
+    ping_default_gateways
+    if [[ $validate_fqdn == "True" ]];then
+      fqdn_check
+    fi
+    if [[ $validate_ntp == "True" ]];then
+      ntp_check
+    fi
+  creation_time: "2018-03-09T19:47:01Z"
+  deployment_name: ComputeAllNodesValidationDeployment
+  group: script
+  id: 58c62536-9f18-41da-9b63-9de3de233d43
+  inputs:
+    - name: ping_test_ips
+      description: 
+      type: String
+      value: |-
+        192.168.24.16 192.168.24.16 192.168.24.16 192.168.24.16 192.168.24.16
+    - name: validate_fqdn
+      description: 
+      type: String
+      value: |-
+        False
+    - name: validate_ntp
+      description: 
+      type: String
+      value: |-
+        True
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-ComputeAllNodesValidationDeployment-n6wcd5kl5edz-0-dsy5a4okkhof/6cf34553-96cf-481e-878a-1bfee7282b86
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+
+ComputeHostPrepDeployment:
+  config: |
+    [
+      {
+        "connection": "local", 
+        "tasks": [
+          {
+            "name": "create persistent logs directory", 
+            "file": {
+              "path": "/var/log/containers/ceilometer", 
+              "state": "directory"
+            }
+          }, 
+          {
+            "ignore_errors": true, 
+            "copy": {
+              "content": "Log files from ceilometer containers can be found under\n/var/log/containers/ceilometer.\n", 
+              "dest": "/var/log/ceilometer/readme.txt"
+            }, 
+            "name": "ceilometer logs readme"
+          }, 
+          {
+            "name": "create persistent logs directory", 
+            "file": {
+              "path": "{{ item }}", 
+              "state": "directory"
+            }, 
+            "with_items": [
+              "/var/log/containers/neutron"
+            ]
+          }, 
+          {
+            "ignore_errors": true, 
+            "copy": {
+              "content": "Log files from neutron containers can be found under\n/var/log/containers/neutron and /var/log/containers/httpd/neutron-api.\n", 
+              "dest": "/var/log/neutron/readme.txt"
+            }, 
+            "name": "neutron logs readme"
+          }, 
+          {
+            "stat": "path=/lib/systemd/system/iscsid.socket", 
+            "register": "stat_iscsid_socket", 
+            "name": "stat /lib/systemd/system/iscsid.socket"
+          }, 
+          {
+            "when": "stat_iscsid_socket.stat.exists", 
+            "name": "Stop and disable iscsid.socket service", 
+            "service": "name=iscsid.socket state=stopped enabled=no"
+          }, 
+          {
+            "name": "create persistent logs directory", 
+            "file": {
+              "path": "/var/log/containers/nova", 
+              "state": "directory"
+            }
+          }, 
+          {
+            "ignore_errors": true, 
+            "copy": {
+              "content": "Log files from nova containers can be found under\n/var/log/containers/nova and /var/log/containers/httpd/nova-*.\n", 
+              "dest": "/var/log/nova/readme.txt"
+            }, 
+            "name": "nova logs readme"
+          }, 
+          {
+            "name": "create persistent directories", 
+            "file": {
+              "path": "{{ item }}", 
+              "state": "directory"
+            }, 
+            "with_items": [
+              "/var/lib/nova", 
+              "/var/lib/libvirt"
+            ]
+          }, 
+          {
+            "name": "ensure ceph configurations exist", 
+            "file": {
+              "path": "/etc/ceph", 
+              "state": "directory"
+            }
+          }, 
+          {
+            "name": "create libvirt persistent data directories", 
+            "file": {
+              "path": "{{ item }}", 
+              "state": "directory"
+            }, 
+            "with_items": [
+              "/etc/libvirt", 
+              "/etc/libvirt/secrets", 
+              "/etc/libvirt/qemu", 
+              "/var/lib/libvirt", 
+              "/var/log/containers/libvirt"
+            ]
+          }, 
+          {
+            "group": {
+              "state": "present", 
+              "gid": 107, 
+              "name": "qemu"
+            }, 
+            "name": "ensure qemu group is present on the host"
+          }, 
+          {
+            "name": "ensure qemu user is present on the host", 
+            "user": {
+              "comment": "qemu user", 
+              "shell": "/sbin/nologin", 
+              "group": "qemu", 
+              "name": "qemu", 
+              "state": "present", 
+              "uid": 107
+            }
+          }, 
+          {
+            "name": "create directory for vhost-user sockets with qemu ownership", 
+            "file": {
+              "owner": "qemu", 
+              "path": "/var/lib/vhost_sockets", 
+              "state": "directory", 
+              "group": "qemu"
+            }
+          }, 
+          {
+            "failed_when": false, 
+            "register": "libvirt_installed", 
+            "command": "/usr/bin/rpm -q libvirt-daemon", 
+            "name": "check if libvirt is installed"
+          }, 
+          {
+            "when": "libvirt_installed.rc == 0", 
+            "name": "make sure libvirt services are disabled", 
+            "service": {
+              "state": "stopped", 
+              "enabled": false, 
+              "name": "{{ item }}"
+            }, 
+            "with_items": [
+              "libvirtd.service", 
+              "virtlogd.socket"
+            ]
+          }, 
+          {
+            "name": "Create /var/lib/docker-puppet", 
+            "file": "path=/var/lib/docker-puppet state=directory setype=svirt_sandbox_file_t selevel=s0 recurse=true"
+          }, 
+          {
+            "copy": "content=\"{{docker_puppet_script}}\" dest=/var/lib/docker-puppet/docker-puppet.py force=yes mode=0600", 
+            "name": "Write docker-puppet.py"
+          }
+        ], 
+        "hosts": "localhost", 
+        "vars": {
+          "docker_puppet_script": "#!/usr/bin/env python\n#\n#    Licensed under the Apache License, Version 2.0 (the \"License\"); you may\n#    not use this file except in compliance with the License. You may obtain\n#    a copy of the License at\n#\n#         http://www.apache.org/licenses/LICENSE-2.0\n#\n#    Unless required by applicable law or agreed to in writing, software\n#    distributed under the License is distributed on an \"AS IS\" BASIS, WITHOUT\n#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the\n#    License for the specific language governing permissions and limitations\n#    under the License.\n\n# Shell script tool to run puppet inside of the given docker container image.\n# Uses the config file at /var/lib/docker-puppet/docker-puppet.json as a source for a JSON\n# array of [config_volume, puppet_tags, manifest, config_image, [volumes]] settings\n# that can be used to generate config files or run ad-hoc puppet modules\n# inside of a container.\n\nimport glob\nimport json\nimport logging\nimport os\nimport subprocess\nimport sys\nimport tempfile\nimport time\nimport multiprocessing\n\nlogger = None\n\n\ndef get_logger():\n    global logger\n    if logger is None:\n        logger = logging.getLogger()\n        ch = logging.StreamHandler(sys.stdout)\n        if os.environ.get('DEBUG', False):\n            logger.setLevel(logging.DEBUG)\n            ch.setLevel(logging.DEBUG)\n        else:\n            logger.setLevel(logging.INFO)\n            ch.setLevel(logging.INFO)\n        formatter = logging.Formatter('%(asctime)s %(levelname)s: '\n                                      '%(process)s -- %(message)s')\n        ch.setFormatter(formatter)\n        logger.addHandler(ch)\n    return logger\n\n\n# this is to match what we do in deployed-server\ndef short_hostname():\n    subproc = subprocess.Popen(['hostname', '-s'],\n                               stdout=subprocess.PIPE,\n                               stderr=subprocess.PIPE)\n    cmd_stdout, cmd_stderr = subproc.communicate()\n    return cmd_stdout.rstrip()\n\n\ndef pull_image(name):\n    log.info('Pulling image: %s' % name)\n    retval = -1\n    count = 0\n    while retval != 0:\n        count += 1\n        subproc = subprocess.Popen(['/usr/bin/docker', 'pull', name],\n                                   stdout=subprocess.PIPE,\n                                   stderr=subprocess.PIPE)\n\n        cmd_stdout, cmd_stderr = subproc.communicate()\n        retval = subproc.returncode\n        if retval != 0:\n            time.sleep(3)\n            log.warning('docker pull failed: %s' % cmd_stderr)\n            log.warning('retrying pulling image: %s' % name)\n        if count >= 5:\n            log.error('Failed to pull image: %s' % name)\n            break\n    if cmd_stdout:\n        log.debug(cmd_stdout)\n    if cmd_stderr:\n        log.debug(cmd_stderr)\n\n\ndef match_config_volumes(prefix, config):\n    # Match the mounted config volumes - we can't just use the\n    # key as e.g \"novacomute\" consumes config-data/nova\n    volumes = config.get('volumes', [])\n    return sorted([os.path.dirname(v.split(\":\")[0]) for v in volumes if\n                   v.startswith(prefix)])\n\n\ndef get_config_hash(config_volume):\n    hashfile = \"%s.md5sum\" % config_volume\n    log.debug(\"Looking for hashfile %s for config_volume %s\" % (hashfile, config_volume))\n    hash_data = None\n    if os.path.isfile(hashfile):\n        log.debug(\"Got hashfile %s for config_volume %s\" % (hashfile, config_volume))\n        with open(hashfile) as f:\n            hash_data = f.read().rstrip()\n    return hash_data\n\n\ndef rm_container(name):\n    if os.environ.get('SHOW_DIFF', None):\n        log.info('Diffing container: %s' % name)\n        subproc = subprocess.Popen(['/usr/bin/docker', 'diff', name],\n                                   stdout=subprocess.PIPE,\n                                   stderr=subprocess.PIPE)\n        cmd_stdout, cmd_stderr = subproc.communicate()\n        if cmd_stdout:\n            log.debug(cmd_stdout)\n        if cmd_stderr:\n            log.debug(cmd_stderr)\n\n    log.info('Removing container: %s' % name)\n    subproc = subprocess.Popen(['/usr/bin/docker', 'rm', name],\n                               stdout=subprocess.PIPE,\n                               stderr=subprocess.PIPE)\n    cmd_stdout, cmd_stderr = subproc.communicate()\n    if cmd_stdout:\n        log.debug(cmd_stdout)\n    if cmd_stderr and \\\n           cmd_stderr != 'Error response from daemon: ' \\\n           'No such container: {}\\n'.format(name):\n        log.debug(cmd_stderr)\n\nprocess_count = int(os.environ.get('PROCESS_COUNT',\n                                   multiprocessing.cpu_count()))\nlog = get_logger()\nlog.info('Running docker-puppet')\nconfig_file = os.environ.get('CONFIG', '/var/lib/docker-puppet/docker-puppet.json')\n# If specified, only this config_volume will be used\nconfig_volume_only = os.environ.get('CONFIG_VOLUME', None)\nlog.debug('CONFIG: %s' % config_file)\nwith open(config_file) as f:\n    json_data = json.load(f)\n\n# To save time we support configuring 'shared' services at the same\n# time. For example configuring all of the heat services\n# in a single container pass makes sense and will save some time.\n# To support this we merge shared settings together here.\n#\n# We key off of config_volume as this should be the same for a\n# given group of services.  We are also now specifying the container\n# in which the services should be configured.  This should match\n# in all instances where the volume name is also the same.\n\nconfigs = {}\n\nfor service in (json_data or []):\n    if service is None:\n        continue\n    if isinstance(service, dict):\n        service = [\n            service.get('config_volume'),\n            service.get('puppet_tags'),\n            service.get('step_config'),\n            service.get('config_image'),\n            service.get('volumes', []),\n        ]\n\n    config_volume = service[0] or ''\n    puppet_tags = service[1] or ''\n    manifest = service[2] or ''\n    config_image = service[3] or ''\n    volumes = service[4] if len(service) > 4 else []\n\n    if not manifest or not config_image:\n        continue\n\n    log.debug('config_volume %s' % config_volume)\n    log.debug('puppet_tags %s' % puppet_tags)\n    log.debug('manifest %s' % manifest)\n    log.debug('config_image %s' % config_image)\n    log.debug('volumes %s' % volumes)\n    # We key off of config volume for all configs.\n    if config_volume in configs:\n        # Append puppet tags and manifest.\n        log.debug(\"Existing service, appending puppet tags and manifest\")\n        if puppet_tags:\n            configs[config_volume][1] = '%s,%s' % (configs[config_volume][1],\n                                                   puppet_tags)\n        if manifest:\n            configs[config_volume][2] = '%s\\n%s' % (configs[config_volume][2],\n                                                    manifest)\n        if configs[config_volume][3] != config_image:\n            log.warn(\"Config containers do not match even though\"\n                     \" shared volumes are the same!\")\n    else:\n        if not config_volume_only or (config_volume_only == config_volume):\n            log.debug(\"Adding new service\")\n            configs[config_volume] = service\n        else:\n            log.debug(\"Ignoring %s due to $CONFIG_VOLUME=%s\" %\n                (config_volume, config_volume_only))\n\nlog.info('Service compilation completed.')\n\n\ndef mp_puppet_config((config_volume, puppet_tags, manifest, config_image, volumes)):\n    log = get_logger()\n    log.info('Starting configuration of %s using image %s' % (config_volume,\n             config_image))\n    log.debug('config_volume %s' % config_volume)\n    log.debug('puppet_tags %s' % puppet_tags)\n    log.debug('manifest %s' % manifest)\n    log.debug('config_image %s' % config_image)\n    log.debug('volumes %s' % volumes)\n    sh_script = '/var/lib/docker-puppet/docker-puppet.sh'\n\n    with open(sh_script, 'w') as script_file:\n        os.chmod(script_file.name, 0755)\n        script_file.write(\"\"\"#!/bin/bash\n        set -ex\n        mkdir -p /etc/puppet\n        cp -a /tmp/puppet-etc/* /etc/puppet\n        rm -Rf /etc/puppet/ssl # not in use and causes permission errors\n        echo \"{\\\\\"step\\\\\": $STEP}\" > /etc/puppet/hieradata/docker.json\n        TAGS=\"\"\n        if [ -n \"$PUPPET_TAGS\" ]; then\n            TAGS=\"--tags \\\"$PUPPET_TAGS\\\"\"\n        fi\n\n        # Create a reference timestamp to easily find all files touched by\n        # puppet. The sync ensures we get all the files we want due to\n        # different timestamp.\n        origin_of_time=/var/lib/config-data/${NAME}.origin_of_time\n        touch $origin_of_time\n        sync\n\n        set +e\n        FACTER_hostname=$HOSTNAME FACTER_uuid=docker /usr/bin/puppet apply --summarize \\\n        --detailed-exitcodes --color=false --logdest syslog --logdest console --modulepath=/etc/puppet/modules:/usr/share/openstack-puppet/modules $TAGS /etc/config.pp\n        rc=$?\n        set -e\n        if [ $rc -ne 2 -a $rc -ne 0 ]; then\n            exit $rc\n        fi\n\n        # Disables archiving\n        if [ -z \"$NO_ARCHIVE\" ]; then\n            archivedirs=(\"/etc\" \"/root\" \"/opt\" \"/var/lib/ironic/tftpboot\" \"/var/lib/ironic/httpboot\" \"/var/www\" \"/var/spool/cron\" \"/var/lib/nova/.ssh\")\n            rsync_srcs=\"\"\n            for d in \"${archivedirs[@]}\"; do\n                if [ -d \"$d\" ]; then\n                    rsync_srcs+=\" $d\"\n                fi\n            done\n            rsync -a -R --delay-updates --delete-after $rsync_srcs /var/lib/config-data/${NAME}\n\n\n            # Also make a copy of files modified during puppet run\n            # This is useful for debugging\n            echo \"Gathering files modified after $(stat -c '%y' $origin_of_time)\"\n            mkdir -p /var/lib/config-data/puppet-generated/${NAME}\n            rsync -a -R -0 --delay-updates --delete-after \\\n                          --files-from=<(find $rsync_srcs -newer $origin_of_time -not -path '/etc/puppet*' -print0) \\\n                          / /var/lib/config-data/puppet-generated/${NAME}\n\n            # Write a checksum of the config-data dir, this is used as a\n            # salt to trigger container restart when the config changes\n            tar -c -f - /var/lib/config-data/${NAME} --mtime='1970-01-01' | md5sum | awk '{print $1}' > /var/lib/config-data/${NAME}.md5sum\n            tar -c -f - /var/lib/config-data/puppet-generated/${NAME} --mtime='1970-01-01' | md5sum | awk '{print $1}' > /var/lib/config-data/puppet-generated/${NAME}.md5sum\n        fi\n        \"\"\")\n\n    with tempfile.NamedTemporaryFile() as tmp_man:\n        with open(tmp_man.name, 'w') as man_file:\n            man_file.write('include ::tripleo::packages\\n')\n            man_file.write(manifest)\n\n        rm_container('docker-puppet-%s' % config_volume)\n        pull_image(config_image)\n\n        dcmd = ['/usr/bin/docker', 'run',\n                '--user', 'root',\n                '--name', 'docker-puppet-%s' % config_volume,\n                '--env', 'PUPPET_TAGS=%s' % puppet_tags,\n                '--env', 'NAME=%s' % config_volume,\n                '--env', 'HOSTNAME=%s' % short_hostname(),\n                '--env', 'NO_ARCHIVE=%s' % os.environ.get('NO_ARCHIVE', ''),\n                '--env', 'STEP=%s' % os.environ.get('STEP', '6'),\n                '--volume', '/etc/localtime:/etc/localtime:ro',\n                '--volume', '%s:/etc/config.pp:ro,z' % tmp_man.name,\n                '--volume', '/etc/puppet/:/tmp/puppet-etc/:ro,z',\n                '--volume', '/usr/share/openstack-puppet/modules/:/usr/share/openstack-puppet/modules/:ro,z',\n                '--volume', '%s:/var/lib/config-data/:z' % os.environ.get('CONFIG_VOLUME_PREFIX', '/var/lib/config-data'),\n                '--volume', 'tripleo_logs:/var/log/tripleo/',\n                # Syslog socket for puppet logs\n                '--volume', '/dev/log:/dev/log',\n                # OpenSSL trusted CA injection\n                '--volume', '/etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro',\n                '--volume', '/etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro',\n                '--volume', '/etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro',\n                '--volume', '/etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro',\n                # script injection\n                '--volume', '%s:%s:z' % (sh_script, sh_script) ]\n\n        for volume in volumes:\n            if volume:\n                dcmd.extend(['--volume', volume])\n\n        dcmd.extend(['--entrypoint', sh_script])\n\n        env = {}\n        # NOTE(flaper87): Always copy the DOCKER_* environment variables as\n        # they contain the access data for the docker daemon.\n        for k in filter(lambda k: k.startswith('DOCKER'), os.environ.keys()):\n            env[k] = os.environ.get(k)\n\n        if os.environ.get('NET_HOST', 'false') == 'true':\n            log.debug('NET_HOST enabled')\n            dcmd.extend(['--net', 'host', '--volume',\n                         '/etc/hosts:/etc/hosts:ro'])\n        dcmd.append(config_image)\n        log.debug('Running docker command: %s' % ' '.join(dcmd))\n\n        subproc = subprocess.Popen(dcmd, stdout=subprocess.PIPE,\n                                   stderr=subprocess.PIPE, env=env)\n        cmd_stdout, cmd_stderr = subproc.communicate()\n        # puppet with --detailed-exitcodes will return 0 for success and no changes\n        # and 2 for success and resource changes. Other numbers are failures\n        if subproc.returncode not in [0, 2]:\n            log.error('Failed running docker-puppet.py for %s' % config_volume)\n            if cmd_stdout:\n                log.error(cmd_stdout)\n            if cmd_stderr:\n                log.error(cmd_stderr)\n        else:\n            if cmd_stdout:\n                log.debug(cmd_stdout)\n            if cmd_stderr:\n                log.debug(cmd_stderr)\n            # only delete successful runs, for debugging\n            rm_container('docker-puppet-%s' % config_volume)\n\n        log.info('Finished processing puppet configs for %s' % (config_volume))\n        return subproc.returncode\n\n# Holds all the information for each process to consume.\n# Instead of starting them all linearly we run them using a process\n# pool.  This creates a list of arguments for the above function\n# to consume.\nprocess_map = []\n\nfor config_volume in configs:\n\n    service = configs[config_volume]\n    puppet_tags = service[1] or ''\n    manifest = service[2] or ''\n    config_image = service[3] or ''\n    volumes = service[4] if len(service) > 4 else []\n\n    if puppet_tags:\n        puppet_tags = \"file,file_line,concat,augeas,cron,%s\" % puppet_tags\n    else:\n        puppet_tags = \"file,file_line,concat,augeas,cron\"\n\n    process_map.append([config_volume, puppet_tags, manifest, config_image, volumes])\n\nfor p in process_map:\n    log.debug('- %s' % p)\n\n# Fire off processes to perform each configuration.  Defaults\n# to the number of CPUs on the system.\nlog.info('Starting multiprocess configuration steps.  Using %d processes.' %\n         process_count)\np = multiprocessing.Pool(process_count)\nreturncodes = list(p.map(mp_puppet_config, process_map))\nconfig_volumes = [pm[0] for pm in process_map]\nsuccess = True\nfor returncode, config_volume in zip(returncodes, config_volumes):\n    if returncode not in [0, 2]:\n        log.error('ERROR configuring %s' % config_volume)\n        success = False\n\n\n# Update the startup configs with the config hash we generated above\nconfig_volume_prefix = os.environ.get('CONFIG_VOLUME_PREFIX', '/var/lib/config-data')\nlog.debug('CONFIG_VOLUME_PREFIX: %s' % config_volume_prefix)\nstartup_configs = os.environ.get('STARTUP_CONFIG_PATTERN', '/var/lib/tripleo-config/docker-container-startup-config-step_*.json')\nlog.debug('STARTUP_CONFIG_PATTERN: %s' % startup_configs)\ninfiles = glob.glob('/var/lib/tripleo-config/docker-container-startup-config-step_*.json')\nfor infile in infiles:\n    with open(infile) as f:\n        infile_data = json.load(f)\n\n    for k, v in infile_data.iteritems():\n        config_volumes = match_config_volumes(config_volume_prefix, v)\n        config_hashes = [get_config_hash(volume_path) for volume_path in config_volumes]\n        config_hashes = filter(None, config_hashes)\n        config_hash = '-'.join(config_hashes)\n        if config_hash:\n            env = v.get('environment', [])\n            env.append(\"TRIPLEO_CONFIG_HASH=%s\" % config_hash)\n            log.debug(\"Updating config hash for %s, config_volume=%s hash=%s\" % (k, config_volume, config_hash))\n            infile_data[k]['environment'] = env\n\n    outfile = os.path.join(os.path.dirname(infile), \"hashed-\" + os.path.basename(infile))\n    with open(outfile, 'w') as out_f:\n        os.chmod(out_f.name, 0600)\n        json.dump(infile_data, out_f, indent=2)\n\nif not success:\n    sys.exit(1)\n", 
+          "bootstrap_server_id": "6d15bb07-dd91-460e-ac11-e1b0a9a8abc6"
+        }
+      }
+    ]
+  creation_time: "2018-03-09T19:47:30Z"
+  deployment_name: ComputeHostPrepDeployment
+  group: ansible
+  id: 8ca90892-83e1-4a37-9071-b64ecbdc2ce2
+  inputs:
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-AllNodesDeploySteps-xmid3d3sdvjm-ComputeHostPrepDeployment-jexfi4uysoak-0-n5zeizwizkpq/7dff422d-79f2-4c6f-97cd-21ce4346ce7e
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {u'modulepath': u'/usr/share/ansible-modules'}
+  outputs:
+
+ComputeArtifactsDeploy:
+  config: |
+    #!/bin/bash
+    
+    TMP_DATA=$(mktemp -d)
+    function cleanup {
+      rm -Rf "$TMP_DATA"
+    }
+    trap cleanup EXIT
+    
+    if [ -n "$artifact_urls" ]; then
+      for URL in $(echo $artifact_urls | sed -e "s| |\n|g" | sort -u); do
+        curl --globoff -o $TMP_DATA/file_data "$URL"
+        if file -b $TMP_DATA/file_data | grep RPM &>/dev/null; then
+          mv $TMP_DATA/file_data $TMP_DATA/file_data.rpm
+          yum install -y $TMP_DATA/file_data.rpm
+          rm $TMP_DATA/file_data.rpm
+        elif file -b $TMP_DATA/file_data | grep 'gzip compressed data' &>/dev/null; then
+          pushd /
+          tar xvzf $TMP_DATA/file_data
+          popd
+        else
+          echo "ERROR: Unsupported file format: $URL"
+          exit 1
+        fi
+        if [ -f $TMP_DATA/file_data ]; then
+          rm $TMP_DATA/file_data
+        fi
+      done
+    else
+      echo "No artifact_urls was set. Skipping..."
+    fi
+  creation_time: "2018-03-09T19:47:31Z"
+  deployment_name: ComputeArtifactsDeploy
+  group: script
+  id: 6f551771-59b7-49b8-898e-43b645c3a28b
+  inputs:
+    - name: artifact_urls
+      description: 
+      type: String
+      value: |-
+        
+    - name: deploy_server_id
+      description: ID of the server being deployed to
+      type: String
+      value: |-
+        e61299b9-fc40-41cf-a59d-da8e397c76dc
+    - name: deploy_action
+      description: Name of the current action being deployed
+      type: String
+      value: |-
+        CREATE
+    - name: deploy_stack_id
+      description: ID of the stack this deployment belongs to
+      type: String
+      value: |-
+        overcloud-AllNodesDeploySteps-xmid3d3sdvjm-ComputeArtifactsDeploy-zes2tgohe5nq-0-bwimo3ykjpck/3ba59bec-1990-4333-8cc8-a0dcbf8d0af8
+    - name: deploy_resource_name
+      description: Name of this deployment resource in the stack
+      type: String
+      value: |-
+        TripleOSoftwareDeployment
+    - name: deploy_signal_transport
+      description: How the server should signal to heat with the deployment output values.
+      type: String
+      value: |-
+        NO_SIGNAL
+  name: deployment_resource
+  options: {}
+  outputs:
+

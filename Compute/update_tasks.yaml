@@ -1,0 +1,54 @@
+- lineinfile: dest=/etc/sysconfig/iptables regexp=".*neutron-" state=absent
+  name: Remove IPv4 iptables rules created by Neutron that are persistent
+  when: step|int == 5
+- lineinfile: dest=/etc/sysconfig/ip6tables regexp=".*neutron-" state=absent
+  name: Remove IPv6 iptables rules created by Neutron that are persistent
+  when: step|int == 5
+- block:
+  - failed_when: false
+    name: Detect if puppet on the docker profile would restart the service
+    register: puppet_docker_noop_output
+    shell: "puppet apply --noop --summarize --detailed-exitcodes --verbose \\\n  --modulepath\
+      \ /etc/puppet/modules:/opt/stack/puppet-modules:/usr/share/openstack-puppet/modules\
+      \ \\\n  --color=false -e \"class { 'tripleo::profile::base::docker': step =>\
+      \ 1, }\" 2>&1 | \\\nawk -F \":\" '/Out of sync:/ { print $2}'\n"
+  - changed_when: docker_check_update.rc == 100
+    failed_when: docker_check_update.rc not in [0, 100]
+    name: Is docker going to be updated
+    register: docker_check_update
+    shell: yum check-update docker
+  - name: Set docker_rpm_needs_update fact
+    set_fact: docker_rpm_needs_update={{ docker_check_update.rc == 100 }}
+  - name: Set puppet_docker_is_outofsync fact
+    set_fact: puppet_docker_is_outofsync={{ puppet_docker_noop_output.stdout|trim|int
+      >= 1 }}
+  - name: Stop all containers
+    shell: docker ps -q | xargs --no-run-if-empty -n1 docker stop
+    when: puppet_docker_is_outofsync or docker_rpm_needs_update
+  - name: Stop docker
+    service:
+      name: docker
+      state: stopped
+    when: puppet_docker_is_outofsync or docker_rpm_needs_update
+  - name: Update the docker package
+    when: docker_rpm_needs_update
+    yum: name=docker state=latest update_cache=yes
+  - changed_when: puppet_docker_apply.rc == 2
+    failed_when: puppet_docker_apply.rc not in [0, 2]
+    name: Apply puppet which will start the service again
+    register: puppet_docker_apply
+    shell: "puppet apply --detailed-exitcodes --verbose \\\n  --modulepath  /etc/puppet/modules:/opt/stack/puppet-modules:/usr/share/openstack-puppet/modules\
+      \ \\\n  -e \"class { 'tripleo::profile::base::docker': step => 1, }\"\n"
+  when: step|int == 2
+- name: Check for existing yum.pid
+  register: yum_pid_file
+  stat: path=/var/run/yum.pid
+  when: step|int == 0 or step|int == 3
+- fail: msg="ERROR existing yum.pid detected - can't continue! Please ensure there
+    is no other package update process for the duration of the minor update worfklow.
+    Exiting."
+  name: Exit if existing yum process
+  when: (step|int == 0 or step|int == 3) and yum_pid_file.stat.exists
+- name: Update all packages
+  when: step == "3"
+  yum: name=* state=latest update_cache=yes

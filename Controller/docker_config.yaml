@@ -1,0 +1,2136 @@
+step_1:
+  cinder_volume_image_tag:
+    command:
+    - /bin/bash
+    - -c
+    - /usr/bin/docker tag 'docker.io/tripleomaster/centos-binary-cinder-volume:current-tripleo'
+      'docker.io/tripleomaster/centos-binary-cinder-volume:pcmklatest'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-cinder-volume:current-tripleo
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /dev/shm:/dev/shm:rw
+    - /etc/sysconfig/docker:/etc/sysconfig/docker:ro
+    - /usr/bin:/usr/bin:ro
+    - /var/run/docker.sock:/var/run/docker.sock:rw
+  haproxy_image_tag:
+    command:
+    - /bin/bash
+    - -c
+    - /usr/bin/docker tag 'docker.io/tripleomaster/centos-binary-haproxy:current-tripleo'
+      'docker.io/tripleomaster/centos-binary-haproxy:pcmklatest'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-haproxy:current-tripleo
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /dev/shm:/dev/shm:rw
+    - /etc/sysconfig/docker:/etc/sysconfig/docker:ro
+    - /usr/bin:/usr/bin:ro
+    - /var/run/docker.sock:/var/run/docker.sock:rw
+  memcached:
+    command:
+    - /bin/bash
+    - -c
+    - source /etc/sysconfig/memcached; /usr/bin/memcached -p ${PORT} -u ${USER} -m
+      ${CACHESIZE} -c ${MAXCONN} $OPTIONS >> /var/log/memcached.log 2>&1
+    image: docker.io/tripleomaster/centos-binary-memcached:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    start_order: 1
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/config-data/memcached/etc/sysconfig/memcached:/etc/sysconfig/memcached:ro
+    - /var/log/containers/memcached:/var/log/
+  memcached_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - source /etc/sysconfig/memcached; touch /var/log/memcached.log && chown ${USER}
+      /var/log/memcached.log
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-memcached:current-tripleo
+    privileged: false
+    start_order: 0
+    user: root
+    volumes:
+    - /var/lib/config-data/memcached/etc/sysconfig/memcached:/etc/sysconfig/memcached:ro
+    - /var/log/containers/memcached:/var/log/
+  mysql_bootstrap:
+    command:
+    - bash
+    - -ecx
+    - 'if [ -e /var/lib/mysql/mysql ]; then exit 0; fi
+
+      echo -e "\n[mysqld]\nwsrep_provider=none" >> /etc/my.cnf
+
+      sudo -u mysql -E kolla_start
+
+      mysqld_safe --skip-networking --wsrep-on=OFF &
+
+      timeout ${DB_MAX_TIMEOUT} /bin/bash -c ''until mysqladmin -uroot -p"${DB_ROOT_PASSWORD}"
+      ping 2>/dev/null; do sleep 1; done''
+
+      mysql -uroot -p"${DB_ROOT_PASSWORD}" -e "CREATE USER ''clustercheck''@''localhost''
+      IDENTIFIED BY ''${DB_CLUSTERCHECK_PASSWORD}'';"
+
+      mysql -uroot -p"${DB_ROOT_PASSWORD}" -e "GRANT PROCESS ON *.* TO ''clustercheck''@''localhost''
+      WITH GRANT OPTION;"
+
+      timeout ${DB_MAX_TIMEOUT} mysqladmin -uroot -p"${DB_ROOT_PASSWORD}" shutdown'
+    detach: false
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    - KOLLA_BOOTSTRAP=True
+    - DB_MAX_TIMEOUT=60
+    - DB_CLUSTERCHECK_PASSWORD=Dczkk2AR6qhPKbBWAMwVMUQbC
+    - DB_ROOT_PASSWORD=RazNVvJAyj
+    image: docker.io/tripleomaster/centos-binary-mariadb:current-tripleo
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/mysql.json:/var/lib/kolla/config_files/config.json
+    - /var/lib/config-data/puppet-generated/mysql/:/var/lib/kolla/config_files/src:ro
+    - /var/lib/mysql:/var/lib/mysql
+  mysql_data_ownership:
+    command:
+    - chown
+    - -R
+    - 'mysql:'
+    - /var/lib/mysql
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-mariadb:current-tripleo
+    net: host
+    start_order: 0
+    user: root
+    volumes:
+    - /var/lib/mysql:/var/lib/mysql
+  mysql_image_tag:
+    command:
+    - /bin/bash
+    - -c
+    - /usr/bin/docker tag 'docker.io/tripleomaster/centos-binary-mariadb:current-tripleo'
+      'docker.io/tripleomaster/centos-binary-mariadb:pcmklatest'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-mariadb:current-tripleo
+    net: host
+    start_order: 2
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /dev/shm:/dev/shm:rw
+    - /etc/sysconfig/docker:/etc/sysconfig/docker:ro
+    - /usr/bin:/usr/bin:ro
+    - /var/run/docker.sock:/var/run/docker.sock:rw
+  rabbitmq_bootstrap:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    - KOLLA_BOOTSTRAP=True
+    - RABBITMQ_CLUSTER_COOKIE=9tRJ9nThdZgVnnwhk8A4
+    image: docker.io/tripleomaster/centos-binary-rabbitmq:current-tripleo
+    net: host
+    privileged: false
+    start_order: 0
+    volumes:
+    - /var/lib/kolla/config_files/rabbitmq.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/rabbitmq/:/var/lib/kolla/config_files/src:ro
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /var/lib/rabbitmq:/var/lib/rabbitmq
+  rabbitmq_image_tag:
+    command:
+    - /bin/bash
+    - -c
+    - /usr/bin/docker tag 'docker.io/tripleomaster/centos-binary-rabbitmq:current-tripleo'
+      'docker.io/tripleomaster/centos-binary-rabbitmq:pcmklatest'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-rabbitmq:current-tripleo
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /dev/shm:/dev/shm:rw
+    - /etc/sysconfig/docker:/etc/sysconfig/docker:ro
+    - /usr/bin:/usr/bin:ro
+    - /var/run/docker.sock:/var/run/docker.sock:rw
+  redis_image_tag:
+    command:
+    - /bin/bash
+    - -c
+    - /usr/bin/docker tag 'docker.io/tripleomaster/centos-binary-redis:current-tripleo'
+      'docker.io/tripleomaster/centos-binary-redis:pcmklatest'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-redis:current-tripleo
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /dev/shm:/dev/shm:rw
+    - /etc/sysconfig/docker:/etc/sysconfig/docker:ro
+    - /usr/bin:/usr/bin:ro
+    - /var/run/docker.sock:/var/run/docker.sock:rw
+step_2:
+  aodh_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R aodh:aodh /var/log/aodh
+    image: docker.io/tripleomaster/centos-binary-aodh-api:current-tripleo
+    user: root
+    volumes:
+    - /var/log/containers/aodh:/var/log/aodh
+    - /var/log/containers/httpd/aodh-api:/var/log/httpd
+  cinder_api_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R cinder:cinder /var/log/cinder
+    image: docker.io/tripleomaster/centos-binary-cinder-api:current-tripleo
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/cinder:/var/log/cinder
+    - /var/log/containers/httpd/cinder-api:/var/log/httpd
+  cinder_scheduler_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R cinder:cinder /var/log/cinder
+    image: docker.io/tripleomaster/centos-binary-cinder-scheduler:current-tripleo
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/cinder:/var/log/cinder
+  clustercheck:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-mariadb:current-tripleo
+    net: host
+    restart: always
+    start_order: 1
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/clustercheck.json:/var/lib/kolla/config_files/config.json
+    - /var/lib/config-data/puppet-generated/clustercheck/:/var/lib/kolla/config_files/src:ro
+    - /var/lib/mysql:/var/lib/mysql
+  glance_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R glance:glance /var/log/glance
+    image: docker.io/tripleomaster/centos-binary-glance-api:current-tripleo
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/glance:/var/log/glance
+  gnocchi_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R gnocchi:gnocchi /var/log/gnocchi
+    image: docker.io/tripleomaster/centos-binary-gnocchi-api:current-tripleo
+    user: root
+    volumes:
+    - /var/log/containers/gnocchi:/var/log/gnocchi
+    - /var/log/containers/httpd/gnocchi-api:/var/log/httpd
+  haproxy_init_bundle:
+    command:
+    - /docker_puppet_apply.sh
+    - '2'
+    - file,file_line,concat,augeas,tripleo::firewall::rule,pacemaker::resource::bundle,pacemaker::property,pacemaker::resource::ip,pacemaker::resource::ocf,pacemaker::constraint::order,pacemaker::constraint::colocation
+    - include ::tripleo::profile::base::pacemaker; include ::tripleo::profile::pacemaker::haproxy_bundle
+    - ''
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-haproxy:current-tripleo
+    net: host
+    privileged: true
+    start_order: 3
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/docker-config-scripts/docker_puppet_apply.sh:/docker_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /etc/ipa/ca.crt:/etc/ipa/ca.crt:ro
+    - /etc/pki/tls/private/haproxy:/etc/pki/tls/private/haproxy:ro
+    - /etc/pki/tls/certs/haproxy:/etc/pki/tls/certs/haproxy:ro
+    - /etc/pki/tls/private/overcloud_endpoint.pem:/etc/pki/tls/private/overcloud_endpoint.pem:ro
+    - /etc/sysconfig:/etc/sysconfig:rw
+    - /usr/libexec/iptables:/usr/libexec/iptables:ro
+    - /usr/libexec/initscripts/legacy-actions:/usr/libexec/initscripts/legacy-actions:ro
+    - /etc/corosync/corosync.conf:/etc/corosync/corosync.conf:ro
+    - /dev/shm:/dev/shm:rw
+  heat_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R heat:heat /var/log/heat
+    image: docker.io/tripleomaster/centos-binary-heat-engine:current-tripleo
+    user: root
+    volumes:
+    - /var/log/containers/heat:/var/log/heat
+  horizon_fix_perms:
+    command:
+    - /bin/bash
+    - -c
+    - touch /var/log/horizon/horizon.log && chown -R apache:apache /var/log/horizon
+      && chmod -R a+rx /etc/openstack-dashboard
+    image: docker.io/tripleomaster/centos-binary-horizon:current-tripleo
+    user: root
+    volumes:
+    - /var/log/containers/horizon:/var/log/horizon
+    - /var/log/containers/httpd/horizon:/var/log/httpd
+    - /var/lib/config-data/puppet-generated/horizon/etc/openstack-dashboard:/etc/openstack-dashboard
+  keystone_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R keystone:keystone /var/log/keystone
+    image: docker.io/tripleomaster/centos-binary-keystone:current-tripleo
+    start_order: 1
+    user: root
+    volumes:
+    - /var/log/containers/keystone:/var/log/keystone
+    - /var/log/containers/httpd/keystone:/var/log/httpd
+  mysql_init_bundle:
+    command:
+    - /docker_puppet_apply.sh
+    - '2'
+    - file,file_line,concat,augeas,pacemaker::resource::bundle,pacemaker::property,pacemaker::resource::ocf,pacemaker::constraint::order,pacemaker::constraint::colocation,galera_ready,mysql_database,mysql_grant,mysql_user
+    - include ::tripleo::profile::base::pacemaker;include ::tripleo::profile::pacemaker::database::mysql_bundle
+    - ''
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-mariadb:current-tripleo
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/docker-config-scripts/docker_puppet_apply.sh:/docker_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /etc/corosync/corosync.conf:/etc/corosync/corosync.conf:ro
+    - /dev/shm:/dev/shm:rw
+    - /var/lib/mysql:/var/lib/mysql:rw
+  neutron_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R neutron:neutron /var/log/neutron
+    image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/neutron:/var/log/neutron
+    - /var/log/containers/httpd/neutron-api:/var/log/httpd
+  nova_api_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R nova:nova /var/log/nova
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-api:/var/log/httpd
+  nova_metadata_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R nova:nova /var/log/nova
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/nova:/var/log/nova
+  nova_placement_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R nova:nova /var/log/nova
+    image: docker.io/tripleomaster/centos-binary-nova-placement-api:current-tripleo
+    start_order: 1
+    user: root
+    volumes:
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-placement:/var/log/httpd
+  panko_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R panko:panko /var/log/panko
+    image: docker.io/tripleomaster/centos-binary-panko-api:current-tripleo
+    user: root
+    volumes:
+    - /var/log/containers/panko:/var/log/panko
+    - /var/log/containers/httpd/panko-api:/var/log/httpd
+  rabbitmq_init_bundle:
+    command:
+    - /docker_puppet_apply.sh
+    - '2'
+    - file,file_line,concat,augeas,pacemaker::resource::bundle,pacemaker::property,pacemaker::resource::ocf,pacemaker::constraint::order,pacemaker::constraint::colocation,rabbitmq_policy,rabbitmq_user,rabbitmq_ready
+    - include ::tripleo::profile::base::pacemaker;include ::tripleo::profile::pacemaker::rabbitmq_bundle
+    - ''
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-rabbitmq:current-tripleo
+    net: host
+    start_order: 0
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/docker-config-scripts/docker_puppet_apply.sh:/docker_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /etc/corosync/corosync.conf:/etc/corosync/corosync.conf:ro
+    - /dev/shm:/dev/shm:rw
+    - /bin/true:/bin/epmd
+  redis_init_bundle:
+    command:
+    - /docker_puppet_apply.sh
+    - '2'
+    - file,file_line,concat,augeas,pacemaker::resource::bundle,pacemaker::property,pacemaker::resource::ocf,pacemaker::constraint::order,pacemaker::constraint::colocation
+    - include ::tripleo::profile::base::pacemaker;include ::tripleo::profile::pacemaker::database::redis_bundle
+    - ''
+    config_volume: redis_init_bundle
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-redis:current-tripleo
+    net: host
+    start_order: 2
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/docker-config-scripts/docker_puppet_apply.sh:/docker_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /etc/corosync/corosync.conf:/etc/corosync/corosync.conf:ro
+    - /dev/shm:/dev/shm:rw
+step_3:
+  aodh_db_sync:
+    command: /usr/bin/bootstrap_host_exec aodh_api su aodh -s /bin/bash -c /usr/bin/aodh-dbsync
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-aodh-api:current-tripleo
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/config-data/aodh/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/aodh/etc/aodh/:/etc/aodh/:ro
+    - /var/log/containers/aodh:/var/log/aodh
+    - /var/log/containers/httpd/aodh-api:/var/log/httpd
+  ceilometer_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R ceilometer:ceilometer /var/log/ceilometer
+    image: docker.io/tripleomaster/centos-binary-ceilometer-notification:current-tripleo
+    start_order: 0
+    user: root
+    volumes:
+    - /var/log/containers/ceilometer:/var/log/ceilometer
+  cinder_api_db_sync:
+    command:
+    - /usr/bin/bootstrap_host_exec
+    - cinder_api
+    - su cinder -s /bin/bash -c 'cinder-manage db sync'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-cinder-api:current-tripleo
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/config-data/cinder/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/cinder/etc/cinder/:/etc/cinder/:ro
+    - /var/log/containers/cinder:/var/log/cinder
+    - /var/log/containers/httpd/cinder-api:/var/log/httpd
+  cinder_volume_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R cinder:cinder /var/log/cinder
+    image: docker.io/tripleomaster/centos-binary-cinder-volume:current-tripleo
+    privileged: false
+    start_order: 0
+    user: root
+    volumes:
+    - /var/log/containers/cinder:/var/log/cinder
+  glance_api_db_sync:
+    command: /usr/bin/bootstrap_host_exec glance_api su glance -s /bin/bash -c '/usr/local/bin/kolla_start'
+    detach: false
+    environment:
+    - KOLLA_BOOTSTRAP=True
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-glance-api:current-tripleo
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/glance:/var/log/glance
+    - /var/lib/kolla/config_files/glance_api.json:/var/lib/kolla/config_files/config.json
+    - /var/lib/config-data/puppet-generated/glance_api/:/var/lib/kolla/config_files/src:ro
+    - /etc/ceph:/var/lib/kolla/config_files/src-ceph:ro
+    - ''
+    - ''
+  heat_engine_db_sync:
+    command: /usr/bin/bootstrap_host_exec heat_engine su heat -s /bin/bash -c 'heat-manage
+      db_sync'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-heat-engine:current-tripleo
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat
+    - /var/lib/config-data/heat/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/heat/etc/heat/:/etc/heat/:ro
+  horizon:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    - ENABLE_CLOUDKITTY=yes
+    - ENABLE_IRONIC=yes
+    - ENABLE_MAGNUM=yes
+    - ENABLE_MANILA=yes
+    - ENABLE_MURANO=no
+    - ENABLE_MISTRAL=yes
+    - ENABLE_NEUTRON_LBAAS=yes
+    - ENABLE_SAHARA=yes
+    - ENABLE_TROVE=yes
+    - ENABLE_FREEZER=no
+    - ENABLE_FWAAS=no
+    - ENABLE_KARBOR=no
+    - ENABLE_DESIGNATE=no
+    - ENABLE_SEARCHLIGHT=no
+    - ENABLE_SENLIN=no
+    - ENABLE_SOLUM=no
+    - ENABLE_TACKER=no
+    - ENABLE_WATCHER=no
+    - ENABLE_ZAQAR=no
+    - ENABLE_ZUN=no
+    image: docker.io/tripleomaster/centos-binary-horizon:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/horizon.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/horizon/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/horizon:/var/log/horizon
+    - /var/log/containers/httpd/horizon:/var/log/httpd
+    - ''
+    - ''
+  iscsid:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-iscsid:current-tripleo
+    net: host
+    privileged: true
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/iscsid.json:/var/lib/kolla/config_files/config.json:ro
+    - /dev/:/dev/
+    - /run/:/run/
+    - /sys:/sys
+    - /lib/modules:/lib/modules:ro
+    - /etc/iscsi:/var/lib/kolla/config_files/src-iscsid:ro
+  keystone:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-keystone:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/keystone:/var/log/keystone
+    - /var/log/containers/httpd/keystone:/var/log/httpd
+    - /var/lib/kolla/config_files/keystone.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/keystone/:/var/lib/kolla/config_files/src:ro
+    - ''
+    - ''
+  keystone_bootstrap:
+    action: exec
+    command:
+    - keystone
+    - /usr/bin/bootstrap_host_exec
+    - keystone
+    - keystone-manage
+    - bootstrap
+    - --bootstrap-password
+    - CTU9zEJAv2ncR2nujhbvZJwsp
+    start_order: 3
+    user: root
+  keystone_cron:
+    command:
+    - /bin/bash
+    - -c
+    - /usr/local/bin/kolla_set_configs && /usr/sbin/crond -n
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-keystone:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    start_order: 4
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/keystone:/var/log/keystone
+    - /var/log/containers/httpd/keystone:/var/log/httpd
+    - /var/lib/kolla/config_files/keystone_cron.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/keystone/:/var/lib/kolla/config_files/src:ro
+  keystone_db_sync:
+    command:
+    - /usr/bin/bootstrap_host_exec
+    - keystone
+    - /usr/local/bin/kolla_start
+    detach: false
+    environment:
+    - KOLLA_BOOTSTRAP=True
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-keystone:current-tripleo
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/keystone:/var/log/keystone
+    - /var/log/containers/httpd/keystone:/var/log/httpd
+    - /var/lib/kolla/config_files/keystone.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/keystone/:/var/lib/kolla/config_files/src:ro
+    - ''
+    - ''
+  neutron_db_sync:
+    command:
+    - /usr/bin/bootstrap_host_exec
+    - neutron_api
+    - neutron-db-manage
+    - upgrade
+    - heads
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/neutron:/var/log/neutron
+    - /var/log/containers/httpd/neutron-api:/var/log/httpd
+    - /var/lib/config-data/neutron/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/neutron/etc/neutron:/etc/neutron:ro
+    - /var/lib/config-data/neutron/usr/share/neutron:/usr/share/neutron:ro
+  neutron_ovs_bridge:
+    command:
+    - puppet
+    - apply
+    - --modulepath
+    - /etc/puppet/modules:/usr/share/openstack-puppet/modules
+    - --tags
+    - file,file_line,concat,augeas,neutron::plugins::ovs::bridge,vs_config
+    - -v
+    - -e
+    - include neutron::agents::ml2::ovs
+    detach: false
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+    net: host
+    pid: host
+    privileged: true
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/neutron_ovs_agent.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/neutron/:/var/lib/kolla/config_files/src:ro
+    - /lib/modules:/lib/modules:ro
+    - /run/openvswitch:/run/openvswitch
+    - /etc/puppet:/etc/puppet:ro
+    - /usr/share/openstack-puppet/modules/:/usr/share/openstack-puppet/modules/:ro
+    - /var/run/openvswitch/db.sock:/var/run/openvswitch/db.sock
+  nova_api_db_sync:
+    command: /usr/bin/bootstrap_host_exec nova_api su nova -s /bin/bash -c '/usr/bin/nova-manage
+      api_db sync'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    net: host
+    start_order: 0
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-api:/var/log/httpd
+    - /var/lib/config-data/nova/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/nova/etc/nova/:/etc/nova/:ro
+  nova_api_ensure_default_cell:
+    command: /usr/bin/bootstrap_host_exec nova_api /nova_api_ensure_default_cell.sh
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    net: host
+    start_order: 2
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-api:/var/log/httpd
+    - /var/lib/config-data/nova/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/nova/etc/nova/:/etc/nova/:ro
+    - /var/lib/config-data/nova/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/nova/etc/nova/:/etc/nova/:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/docker-config-scripts/nova_api_ensure_default_cell.sh:/nova_api_ensure_default_cell.sh:ro
+  nova_api_map_cell0:
+    command: /usr/bin/bootstrap_host_exec nova_api su nova -s /bin/bash -c '/usr/bin/nova-manage
+      cell_v2 map_cell0'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-api:/var/log/httpd
+    - /var/lib/config-data/nova/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/nova/etc/nova/:/etc/nova/:ro
+  nova_db_sync:
+    command: /usr/bin/bootstrap_host_exec nova_api su nova -s /bin/bash -c '/usr/bin/nova-manage
+      db sync'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    net: host
+    start_order: 3
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-api:/var/log/httpd
+    - /var/lib/config-data/nova/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/nova/etc/nova/:/etc/nova/:ro
+  nova_placement:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-nova-placement-api:current-tripleo
+    net: host
+    restart: always
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-placement:/var/log/httpd
+    - /var/lib/kolla/config_files/nova_placement.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova_placement/:/var/lib/kolla/config_files/src:ro
+    - ''
+    - ''
+  panko_db_sync:
+    command: /usr/bin/bootstrap_host_exec panko_api su panko -s /bin/bash -c '/usr/bin/panko-dbsync  '
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-panko-api:current-tripleo
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/panko:/var/log/panko
+    - /var/log/containers/httpd/panko-api:/var/log/httpd
+    - /var/lib/config-data/panko/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/panko/etc/panko:/etc/panko:ro
+  swift_copy_rings:
+    command:
+    - /bin/bash
+    - -c
+    - cp -v -a -t /etc/swift /swift_ringbuilder/etc/swift/*.gz /swift_ringbuilder/etc/swift/*.builder
+      /swift_ringbuilder/etc/swift/backups
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-swift-proxy-server:current-tripleo
+    user: root
+    volumes:
+    - /var/lib/config-data/puppet-generated/swift/etc/swift:/etc/swift:rw
+    - /var/lib/config-data/swift_ringbuilder:/swift_ringbuilder:ro
+  swift_setup_srv:
+    command:
+    - chown
+    - -R
+    - 'swift:'
+    - /srv/node
+    image: docker.io/tripleomaster/centos-binary-swift-account:current-tripleo
+    user: root
+    volumes:
+    - /srv/node:/srv/node
+step_4:
+  aodh_api:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-aodh-api:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/aodh_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/aodh/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/aodh:/var/log/aodh
+    - /var/log/containers/httpd/aodh-api:/var/log/httpd
+    - ''
+    - ''
+  aodh_evaluator:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-aodh-evaluator:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/aodh_evaluator.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/aodh/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/aodh:/var/log/aodh
+  aodh_listener:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-aodh-listener:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/aodh_listener.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/aodh/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/aodh:/var/log/aodh
+  aodh_notifier:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-aodh-notifier:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/aodh_notifier.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/aodh/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/aodh:/var/log/aodh
+  ceilometer_agent_central:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-ceilometer-central:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/ceilometer_agent_central.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/ceilometer/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/ceilometer:/var/log/ceilometer
+  ceilometer_agent_notification:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-ceilometer-notification:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/ceilometer_agent_notification.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/ceilometer/:/var/lib/kolla/config_files/src:ro
+    - /var/lib/config-data/puppet-generated/panko/:/var/lib/kolla/config_files/src-panko:ro
+    - /var/log/containers/ceilometer:/var/log/ceilometer
+  cinder_api:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-cinder-api:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/cinder_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/cinder/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/cinder:/var/log/cinder
+    - /var/log/containers/httpd/cinder-api:/var/log/httpd
+    - ''
+    - ''
+  cinder_api_cron:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-cinder-api:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/cinder_api_cron.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/cinder/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/cinder:/var/log/cinder
+    - /var/log/containers/httpd/cinder-api:/var/log/httpd
+  cinder_scheduler:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-cinder-scheduler:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/cinder_scheduler.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/cinder/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/cinder:/var/log/cinder
+  glance_api:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-glance-api:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/glance:/var/log/glance
+    - /var/lib/kolla/config_files/glance_api.json:/var/lib/kolla/config_files/config.json
+    - /var/lib/config-data/puppet-generated/glance_api/:/var/lib/kolla/config_files/src:ro
+    - /etc/ceph:/var/lib/kolla/config_files/src-ceph:ro
+    - ''
+    - ''
+  gnocchi_db_sync:
+    detach: false
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-gnocchi-api:current-tripleo
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/gnocchi_db_sync.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/gnocchi/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/gnocchi:/var/log/gnocchi
+    - /var/log/containers/httpd/gnocchi-api:/var/log/httpd
+    - /etc/ceph:/var/lib/kolla/config_files/src-ceph:ro
+  heat_api:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-heat-api:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat
+    - /var/log/containers/httpd/heat-api:/var/log/httpd
+    - /var/lib/kolla/config_files/heat_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/heat_api/:/var/lib/kolla/config_files/src:ro
+    - ''
+    - ''
+  heat_api_cfn:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-heat-api-cfn:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat
+    - /var/log/containers/httpd/heat-api-cfn:/var/log/httpd
+    - /var/lib/kolla/config_files/heat_api_cfn.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/heat_api_cfn/:/var/lib/kolla/config_files/src:ro
+    - ''
+    - ''
+  heat_api_cron:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-heat-api:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat
+    - /var/log/containers/httpd/heat-api:/var/log/httpd
+    - /var/lib/kolla/config_files/heat_api_cron.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/heat_api/:/var/lib/kolla/config_files/src:ro
+  heat_engine:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-heat-engine:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat
+    - /var/lib/kolla/config_files/heat_engine.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/heat/:/var/lib/kolla/config_files/src:ro
+  logrotate_crond:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-cron:current-tripleo
+    net: none
+    pid: host
+    privileged: true
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/logrotate-crond.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/crond/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers:/var/log/containers
+  neutron_api:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-neutron-server:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    start_order: 0
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/neutron:/var/log/neutron
+    - /var/log/containers/httpd/neutron-api:/var/log/httpd
+    - /var/lib/kolla/config_files/neutron_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/neutron/:/var/lib/kolla/config_files/src:ro
+  neutron_dhcp:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-neutron-dhcp-agent:current-tripleo
+    net: host
+    pid: host
+    privileged: true
+    restart: always
+    start_order: 10
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/neutron:/var/log/neutron
+    - /var/lib/kolla/config_files/neutron_dhcp.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/neutron/:/var/lib/kolla/config_files/src:ro
+    - /lib/modules:/lib/modules:ro
+    - /run/openvswitch:/run/openvswitch
+    - /var/lib/neutron:/var/lib/neutron
+    - /run/netns:/run/netns:shared
+  neutron_l3_agent:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-neutron-l3-agent:current-tripleo
+    net: host
+    pid: host
+    privileged: true
+    restart: always
+    start_order: 10
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/neutron:/var/log/neutron
+    - /var/lib/kolla/config_files/neutron_l3_agent.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/neutron/:/var/lib/kolla/config_files/src:ro
+    - /lib/modules:/lib/modules:ro
+    - /run/openvswitch:/run/openvswitch
+    - /var/lib/neutron:/var/lib/neutron
+    - /run/netns:/run/netns:shared
+  neutron_metadata_agent:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-neutron-metadata-agent:current-tripleo
+    net: host
+    pid: host
+    privileged: true
+    restart: always
+    start_order: 10
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/neutron:/var/log/neutron
+    - /var/lib/kolla/config_files/neutron_metadata_agent.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/neutron/:/var/lib/kolla/config_files/src:ro
+    - /lib/modules:/lib/modules:ro
+    - /var/lib/neutron:/var/lib/neutron
+  neutron_ovs_agent:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-neutron-openvswitch-agent:current-tripleo
+    net: host
+    pid: host
+    privileged: true
+    restart: always
+    start_order: 10
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/neutron:/var/log/neutron
+    - /var/lib/kolla/config_files/neutron_ovs_agent.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/neutron/:/var/lib/kolla/config_files/src:ro
+    - /lib/modules:/lib/modules:ro
+    - /run/openvswitch:/run/openvswitch
+  nova_api:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    net: host
+    privileged: true
+    restart: always
+    start_order: 2
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-api:/var/log/httpd
+    - /var/lib/kolla/config_files/nova_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova/:/var/lib/kolla/config_files/src:ro
+    - ''
+    - ''
+  nova_api_cron:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-api:/var/log/httpd
+    - /var/lib/kolla/config_files/nova_api_cron.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova/:/var/lib/kolla/config_files/src:ro
+  nova_conductor:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-nova-conductor:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/kolla/config_files/nova_conductor.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova/:/var/lib/kolla/config_files/src:ro
+  nova_consoleauth:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-nova-consoleauth:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/kolla/config_files/nova_consoleauth.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova/:/var/lib/kolla/config_files/src:ro
+  nova_metadata:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    net: host
+    privileged: true
+    restart: always
+    start_order: 2
+    user: nova
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/kolla/config_files/nova_metadata.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova/:/var/lib/kolla/config_files/src:ro
+  nova_scheduler:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-nova-scheduler:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/kolla/config_files/nova_scheduler.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova/:/var/lib/kolla/config_files/src:ro
+    - /run:/run
+  nova_vnc_proxy:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-nova-novncproxy:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/kolla/config_files/nova_vnc_proxy.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova/:/var/lib/kolla/config_files/src:ro
+  panko_api:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-panko-api:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/panko:/var/log/panko
+    - /var/log/containers/httpd/panko-api:/var/log/httpd
+    - /var/lib/kolla/config_files/panko_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/panko/:/var/lib/kolla/config_files/src:ro
+    - ''
+    - ''
+  swift_account_auditor:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-account:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_account_auditor.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_account_reaper:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-account:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_account_reaper.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_account_replicator:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-account:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_account_replicator.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_account_server:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-swift-account:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_account_server.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_container_auditor:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-container:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_container_auditor.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_container_replicator:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-container:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_container_replicator.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_container_server:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-swift-container:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_container_server.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_container_updater:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-container:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_container_updater.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_object_auditor:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-object:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_auditor.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_object_expirer:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-proxy-server:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_expirer.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_object_replicator:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-object:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_replicator.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_object_server:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-swift-object:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_server.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_object_updater:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-object:current-tripleo
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_updater.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+  swift_proxy:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: docker.io/tripleomaster/centos-binary-swift-proxy-server:current-tripleo
+    net: host
+    restart: always
+    start_order: 2
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_proxy.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /run:/run
+    - /srv/node:/srv/node
+    - /dev:/dev
+  swift_rsync:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-swift-object:current-tripleo
+    net: host
+    privileged: true
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_rsync.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift/:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+step_5:
+  ceilometer_gnocchi_upgrade:
+    command:
+    - /usr/bin/bootstrap_host_exec
+    - ceilometer_agent_central
+    - su ceilometer -s /bin/bash -c 'for n in {1..10}; do /usr/bin/ceilometer-upgrade
+      --skip-metering-database && exit 0 || sleep 5; done; exit 1'
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-ceilometer-central:current-tripleo
+    net: host
+    privileged: false
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/config-data/ceilometer/etc/ceilometer/:/etc/ceilometer/:ro
+    - /var/log/containers/ceilometer:/var/log/ceilometer
+  cinder_volume_init_bundle:
+    command:
+    - /docker_puppet_apply.sh
+    - '5'
+    - file,file_line,concat,augeas,pacemaker::resource::bundle,pacemaker::property,pacemaker::constraint::location
+    - include ::tripleo::profile::base::pacemaker;include ::tripleo::profile::pacemaker::cinder::volume_bundle
+    - ''
+    detach: false
+    image: docker.io/tripleomaster/centos-binary-cinder-volume:current-tripleo
+    net: host
+    start_order: 0
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/docker-config-scripts/docker_puppet_apply.sh:/docker_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /etc/corosync/corosync.conf:/etc/corosync/corosync.conf:ro
+    - /dev/shm:/dev/shm:rw
+  gnocchi_api:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-gnocchi-api:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/gnocchi_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/gnocchi/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/gnocchi:/var/log/gnocchi
+    - /var/log/containers/httpd/gnocchi-api:/var/log/httpd
+    - /etc/ceph:/var/lib/kolla/config_files/src-ceph:ro
+    - ''
+    - ''
+  gnocchi_metricd:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-gnocchi-metricd:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/gnocchi_metricd.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/gnocchi/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/gnocchi:/var/log/gnocchi
+    - /etc/ceph:/var/lib/kolla/config_files/src-ceph:ro
+  gnocchi_statsd:
+    environment:
+    - KOLLA_CONFIG_STRATEGY=COPY_ALWAYS
+    image: docker.io/tripleomaster/centos-binary-gnocchi-statsd:current-tripleo
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/gnocchi_statsd.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/gnocchi/:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/gnocchi:/var/log/gnocchi
+    - /etc/ceph:/var/lib/kolla/config_files/src-ceph:ro
+  nova_api_discover_hosts:
+    command: /usr/bin/bootstrap_host_exec nova_api /nova_api_discover_hosts.sh
+    detach: false
+    environment:
+    - TRIPLEO_DEPLOY_IDENTIFIER=1520623270
+    image: docker.io/tripleomaster/centos-binary-nova-api:current-tripleo
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/log/containers/httpd/nova-api:/var/log/httpd
+    - /var/lib/config-data/nova/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/nova/etc/nova/:/etc/nova/:ro
+    - /var/lib/config-data/nova/etc/my.cnf.d/tripleo.cnf:/etc/my.cnf.d/tripleo.cnf:ro
+    - /var/lib/config-data/nova/etc/nova/:/etc/nova/:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/docker-config-scripts/nova_api_discover_hosts.sh:/nova_api_discover_hosts.sh:ro

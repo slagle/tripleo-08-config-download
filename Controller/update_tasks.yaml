@@ -1,0 +1,194 @@
+- block:
+  - name: Get docker Cinder-Volume image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-cinder-volume:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-cinder-volume:pcmklatest
+  - name: Get previous Cinder-Volume image id
+    register: cinder_volume_image_id
+    shell: docker images | awk '/cinder-volume.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Cinder-Volume image
+      register: cinder_volume_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{cinder_volume_image_id.stdout}}'
+    - name: Remove any container using the same Cinder-Volume image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ cinder_volume_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Cinder-Volume images
+      shell: docker rmi -f {{cinder_volume_image_id.stdout}}
+    when:
+    - cinder_volume_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Cinder-Volume images
+  - name: Retag pcmklatest to latest Cinder-Volume image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Cinder-Volume fetch and retag container image for pacemaker
+  when: step|int == 2
+- block:
+  - failed_when: false
+    name: Detect if puppet on the docker profile would restart the service
+    register: puppet_docker_noop_output
+    shell: "puppet apply --noop --summarize --detailed-exitcodes --verbose \\\n  --modulepath\
+      \ /etc/puppet/modules:/opt/stack/puppet-modules:/usr/share/openstack-puppet/modules\
+      \ \\\n  --color=false -e \"class { 'tripleo::profile::base::docker': step =>\
+      \ 1, }\" 2>&1 | \\\nawk -F \":\" '/Out of sync:/ { print $2}'\n"
+  - changed_when: docker_check_update.rc == 100
+    failed_when: docker_check_update.rc not in [0, 100]
+    name: Is docker going to be updated
+    register: docker_check_update
+    shell: yum check-update docker
+  - name: Set docker_rpm_needs_update fact
+    set_fact: docker_rpm_needs_update={{ docker_check_update.rc == 100 }}
+  - name: Set puppet_docker_is_outofsync fact
+    set_fact: puppet_docker_is_outofsync={{ puppet_docker_noop_output.stdout|trim|int
+      >= 1 }}
+  - name: Stop all containers
+    shell: docker ps -q | xargs --no-run-if-empty -n1 docker stop
+    when: puppet_docker_is_outofsync or docker_rpm_needs_update
+  - name: Stop docker
+    service:
+      name: docker
+      state: stopped
+    when: puppet_docker_is_outofsync or docker_rpm_needs_update
+  - name: Update the docker package
+    when: docker_rpm_needs_update
+    yum: name=docker state=latest update_cache=yes
+  - changed_when: puppet_docker_apply.rc == 2
+    failed_when: puppet_docker_apply.rc not in [0, 2]
+    name: Apply puppet which will start the service again
+    register: puppet_docker_apply
+    shell: "puppet apply --detailed-exitcodes --verbose \\\n  --modulepath  /etc/puppet/modules:/opt/stack/puppet-modules:/usr/share/openstack-puppet/modules\
+      \ \\\n  -e \"class { 'tripleo::profile::base::docker': step => 1, }\"\n"
+  when: step|int == 2
+- block:
+  - name: Get docker Haproxy image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-haproxy:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-haproxy:pcmklatest
+  - name: Get previous Haproxy image id
+    register: haproxy_image_id
+    shell: docker images | awk '/haproxy.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Haproxy image
+      register: haproxy_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{haproxy_image_id.stdout}}'
+    - name: Remove any container using the same Haproxy image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ haproxy_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Haproxy images
+      shell: docker rmi -f {{haproxy_image_id.stdout}}
+    when:
+    - haproxy_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Haproxy images
+  - name: Retag pcmklatest to latest Haproxy image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Haproxy fetch and retag container image for pacemaker
+  when: step|int == 2
+- block:
+  - name: Get docker Mariadb image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-mariadb:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-mariadb:pcmklatest
+  - name: Get previous Mariadb image id
+    register: mariadb_image_id
+    shell: docker images | awk '/mariadb.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Mariadb image
+      register: mariadb_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{mariadb_image_id.stdout}}'
+    - name: Remove any container using the same Mariadb image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ mariadb_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Mariadb images
+      shell: docker rmi -f {{mariadb_image_id.stdout}}
+    when:
+    - mariadb_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Mariadb images
+  - name: Retag pcmklatest to latest Mariadb image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Mariadb fetch and retag container image for pacemaker
+  when: step|int == 2
+- lineinfile: dest=/etc/sysconfig/iptables regexp=".*neutron-" state=absent
+  name: Remove IPv4 iptables rules created by Neutron that are persistent
+  when: step|int == 5
+- lineinfile: dest=/etc/sysconfig/ip6tables regexp=".*neutron-" state=absent
+  name: Remove IPv6 iptables rules created by Neutron that are persistent
+  when: step|int == 5
+- async: 30
+  name: Check pacemaker cluster running before the minor update
+  pacemaker_cluster: state=online check_and_fail=true
+  poll: 4
+  when: step|int == 0
+- name: Stop pacemaker cluster
+  pacemaker_cluster: state=offline
+  when: step|int == 1
+- name: Start pacemaker cluster
+  pacemaker_cluster: state=online
+  when: step|int == 4
+- block:
+  - name: Get docker Rabbitmq image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-rabbitmq:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-rabbitmq:pcmklatest
+  - name: Get previous Rabbitmq image id
+    register: rabbitmq_image_id
+    shell: docker images | awk '/rabbitmq.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Rabbitmq image
+      register: rabbitmq_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{rabbitmq_image_id.stdout}}'
+    - name: Remove any container using the same Rabbitmq image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ rabbitmq_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Rabbitmq images
+      shell: docker rmi -f {{rabbitmq_image_id.stdout}}
+    when:
+    - rabbitmq_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Rabbitmq images
+  - name: Retag pcmklatest to latest Rabbitmq image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Rabbit fetch and retag container image for pacemaker
+  when: step|int == 2
+- block:
+  - name: Get docker Redis image
+    set_fact:
+      docker_image: docker.io/tripleomaster/centos-binary-redis:current-tripleo
+      docker_image_latest: docker.io/tripleomaster/centos-binary-redis:pcmklatest
+  - name: Get previous Redis image id
+    register: redis_image_id
+    shell: docker images | awk '/redis.* pcmklatest/{print $3}'
+  - block:
+    - name: Get a list of container using Redis image
+      register: redis_containers_to_destroy
+      shell: docker ps -a -q -f 'ancestor={{redis_image_id.stdout}}'
+    - name: Remove any container using the same Redis image
+      shell: docker rm -fv {{item}}
+      with_items: '{{ redis_containers_to_destroy.stdout_lines }}'
+    - name: Remove previous Redis images
+      shell: docker rmi -f {{redis_image_id.stdout}}
+    when:
+    - redis_image_id.stdout != ''
+  - command: docker pull {{docker_image}}
+    name: Pull latest Redis images
+  - name: Retag pcmklatest to latest Redis image
+    shell: docker tag {{docker_image}} {{docker_image_latest}}
+  name: Redis fetch and retag container image for pacemaker
+  when: step|int == 2
+- file:
+    path: /var/run/rsyncd.pid
+    state: absent
+  name: Ensure rsyncd pid file is absent
+- name: Check for existing yum.pid
+  register: yum_pid_file
+  stat: path=/var/run/yum.pid
+  when: step|int == 0 or step|int == 3
+- fail: msg="ERROR existing yum.pid detected - can't continue! Please ensure there
+    is no other package update process for the duration of the minor update worfklow.
+    Exiting."
+  name: Exit if existing yum process
+  when: (step|int == 0 or step|int == 3) and yum_pid_file.stat.exists
+- name: Update all packages
+  when: step == "3"
+  yum: name=* state=latest update_cache=yes

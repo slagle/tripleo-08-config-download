@@ -1,0 +1,6 @@
+- hosts: overcloud
+  tasks:
+    - include: upgrade_steps_tasks.yaml
+      with_sequence: start=0 end=5
+      loop_control:
+        loop_var: step

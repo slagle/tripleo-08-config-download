@@ -1,0 +1,387 @@
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/aodh
+  - /var/log/containers/httpd/aodh-api
+- copy:
+    content: 'Log files from aodh containers can be found under
+
+      /var/log/containers/aodh and /var/log/containers/httpd/aodh-api.
+
+      '
+    dest: /var/log/aodh/readme.txt
+  ignore_errors: true
+  name: aodh logs readme
+- file:
+    path: /var/log/containers/aodh
+    state: directory
+  name: create persistent logs directory
+- file:
+    path: /var/log/containers/ceilometer
+    state: directory
+  name: create persistent logs directory
+- copy:
+    content: 'Log files from ceilometer containers can be found under
+
+      /var/log/containers/ceilometer.
+
+      '
+    dest: /var/log/ceilometer/readme.txt
+  ignore_errors: true
+  name: ceilometer logs readme
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/cinder
+  - /var/log/containers/httpd/cinder-api
+- copy:
+    content: 'Log files from cinder containers can be found under
+
+      /var/log/containers/cinder and /var/log/containers/httpd/cinder-api.
+
+      '
+    dest: /var/log/cinder/readme.txt
+  ignore_errors: true
+  name: cinder logs readme
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - /var/log/containers/cinder
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - /var/log/containers/cinder
+  - /var/lib/cinder
+- file:
+    path: /etc/ceph
+    state: directory
+  name: ensure ceph configurations exist
+- name: cinder_enable_iscsi_backend fact
+  set_fact:
+    cinder_enable_iscsi_backend: true
+- args:
+    creates: /var/lib/cinder/cinder-volumes
+  command: dd if=/dev/zero of=/var/lib/cinder/cinder-volumes bs=1 count=0 seek=10280M
+  name: cinder create LVM volume group dd
+  when: cinder_enable_iscsi_backend
+- args:
+    creates: /dev/loop2
+    executable: /bin/bash
+  name: cinder create LVM volume group
+  shell: "if ! losetup /dev/loop2; then\n  losetup /dev/loop2 /var/lib/cinder/cinder-volumes\n\
+    fi\nif ! pvdisplay | grep cinder-volumes; then\n  pvcreate /dev/loop2\nfi\nif\
+    \ ! vgdisplay | grep cinder-volumes; then\n  vgcreate cinder-volumes /dev/loop2\n\
+    fi\n"
+  when: cinder_enable_iscsi_backend
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/glance
+- copy:
+    content: 'Log files from glance containers can be found under
+
+      /var/log/containers/glance.
+
+      '
+    dest: /var/log/glance/readme.txt
+  ignore_errors: true
+  name: glance logs readme
+- block:
+  - name: null
+    set_fact:
+      remote_file_path: /etc/glance/glance-metadata-file.conf
+  - file:
+      path: '{{ remote_file_path }}'
+      state: touch
+    name: null
+  - register: file_path
+    stat: path="{{ remote_file_path }}"
+  - copy:
+      content:
+        mount_point: /var/lib/glance/images
+        share_location: '{{item.NETAPP_SHARE}}'
+        type: nfs
+      dest: '{{ remote_file_path }}'
+    when:
+    - file_path.stat.exists == true
+    with_items:
+    - NETAPP_SHARE: ''
+  - mount: name=/var/lib/glance/images src="{{item.NETAPP_SHARE}}" fstype=nfs4 opts="{{item.NFS_OPTIONS}}"
+      state=mounted
+    name: null
+    with_items:
+    - NETAPP_SHARE: ''
+      NFS_OPTIONS: _netdev,bg,intr,context=system_u:object_r:glance_var_lib_t:s0
+  name: Mount Netapp NFS
+  vars:
+    netapp_nfs_backend_enable: false
+  when: netapp_nfs_backend_enable
+- mount: name=/var/lib/glance/images src="{{item.NFS_SHARE}}" fstype=nfs4 opts="{{item.NFS_OPTIONS}}"
+    state=mounted
+  name: Mount NFS on host
+  vars:
+    nfs_backend_enable: false
+  when:
+  - nfs_backend_enable
+  with_items:
+  - NFS_OPTIONS: _netdev,bg,intr,context=system_u:object_r:glance_var_lib_t:s0
+    NFS_SHARE: ''
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/gnocchi
+  - /var/log/containers/httpd/gnocchi-api
+- copy:
+    content: 'Log files from gnocchi containers can be found under
+
+      /var/log/containers/gnocchi and /var/log/containers/httpd/gnocchi-api.
+
+      '
+    dest: /var/log/gnocchi/readme.txt
+  ignore_errors: true
+  name: gnocchi logs readme
+- file:
+    path: /var/log/containers/gnocchi
+    state: directory
+  name: create persistent logs directory
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/heat
+  - /var/log/containers/httpd/heat-api
+- copy:
+    content: 'Log files from heat containers can be found under
+
+      /var/log/containers/heat and /var/log/containers/httpd/heat-api*.
+
+      '
+    dest: /var/log/heat/readme.txt
+  ignore_errors: true
+  name: heat logs readme
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/heat
+  - /var/log/containers/httpd/heat-api-cfn
+- file:
+    path: /var/log/containers/heat
+    state: directory
+  name: create persistent logs directory
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/horizon
+  - /var/log/containers/httpd/horizon
+- copy:
+    content: 'Log files from horizon containers can be found under
+
+      /var/log/containers/horizon and /var/log/containers/httpd/horizon.
+
+      '
+    dest: /var/log/horizon/readme.txt
+  ignore_errors: true
+  name: horizon logs readme
+- name: stat /lib/systemd/system/iscsid.socket
+  register: stat_iscsid_socket
+  stat: path=/lib/systemd/system/iscsid.socket
+- name: Stop and disable iscsid.socket service
+  service: name=iscsid.socket state=stopped enabled=no
+  when: stat_iscsid_socket.stat.exists
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/keystone
+  - /var/log/containers/httpd/keystone
+- copy:
+    content: 'Log files from keystone containers can be found under
+
+      /var/log/containers/keystone and /var/log/containers/httpd/keystone.
+
+      '
+    dest: /var/log/keystone/readme.txt
+  ignore_errors: true
+  name: keystone logs readme
+- file:
+    path: /var/log/containers/memcached
+    state: directory
+  name: create persistent logs directory
+- copy:
+    content: 'Log files from memcached containers can be found under
+
+      /var/log/containers/memcached.
+
+      '
+    dest: /var/log/memcached-readme.txt
+  ignore_errors: true
+  name: memcached logs readme
+- file:
+    path: /var/lib/mysql
+    state: directory
+  name: create /var/lib/mysql
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/neutron
+  - /var/log/containers/httpd/neutron-api
+- copy:
+    content: 'Log files from neutron containers can be found under
+
+      /var/log/containers/neutron and /var/log/containers/httpd/neutron-api.
+
+      '
+    dest: /var/log/neutron/readme.txt
+  ignore_errors: true
+  name: neutron logs readme
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/neutron
+- file:
+    path: /var/lib/neutron
+    state: directory
+  name: create /var/lib/neutron
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/nova
+  - /var/log/containers/httpd/nova-api
+- copy:
+    content: 'Log files from nova containers can be found under
+
+      /var/log/containers/nova and /var/log/containers/httpd/nova-*.
+
+      '
+    dest: /var/log/nova/readme.txt
+  ignore_errors: true
+  name: nova logs readme
+- file:
+    path: /var/log/containers/nova
+    state: directory
+  name: create persistent logs directory
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/nova
+  - /var/log/containers/httpd/nova-placement
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - /var/log/containers/panko
+  - /var/log/containers/httpd/panko-api
+- copy:
+    content: 'Log files from panko containers can be found under
+
+      /var/log/containers/panko and /var/log/containers/httpd/panko-api.
+
+      '
+    dest: /var/log/panko/readme.txt
+  ignore_errors: true
+  name: panko logs readme
+- file:
+    path: /var/lib/rabbitmq
+    state: directory
+  name: create /var/lib/rabbitmq
+- name: stop the Erlang port mapper on the host and make sure it cannot bind to the
+    port used by container
+  shell: 'echo ''export ERL_EPMD_ADDRESS=127.0.0.1'' > /etc/rabbitmq/rabbitmq-env.conf
+
+    echo ''export ERL_EPMD_PORT=4370'' >> /etc/rabbitmq/rabbitmq-env.conf
+
+    for pid in $(pgrep epmd --ns 1 --nslist pid); do kill $pid; done
+
+    '
+- file:
+    path: /var/run/redis
+    state: directory
+  name: create /var/run/redis
+- file:
+    path: /var/log/redis
+    state: directory
+  name: create /var/log/redis
+- file:
+    path: /var/lib/redis
+    state: directory
+  name: create /var/lib/redis
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - /srv/node
+  - /var/log/swift
+- file:
+    dest: /var/log/containers/swift
+    src: /var/log/swift
+    state: link
+  name: Create swift logging symlink
+- file:
+    path: '{{ item }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - /srv/node
+  - /var/log/swift
+  - /var/log/containers
+- name: Set swift_use_local_disks fact
+  set_fact:
+    swift_use_local_disks: true
+- file:
+    path: /srv/node/d1
+    state: directory
+  name: Create Swift d1 directory if needed
+  when: swift_use_local_disks
+- copy:
+    content: 'Log files from swift containers can be found under
+
+      /var/log/containers/swift and /var/log/containers/httpd/swift-*.
+
+      '
+    dest: /var/log/swift/readme.txt
+  ignore_errors: true
+  name: swift logs readme
+- filesystem:
+    dev: /dev/{{ item }}
+    fstype: xfs
+    opts: -f -i size=1024
+  name: Format SwiftRawDisks
+  with_items:
+  - []
+- mount:
+    fstype: xfs
+    name: /srv/node/{{ item }}
+    opts: noatime
+    src: /dev/{{ item }}
+    state: mounted
+  name: Mount devices defined in SwiftRawDisks
+  with_items:
+  - []
